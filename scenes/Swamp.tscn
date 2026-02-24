@@ -1,0 +1,43 @@
+[gd_scene load_steps=6 format=3 uid="uid://behqij2bghpnx"]
+
+[ext_resource type="Script" uid="uid://ly860w4bx3br" path="res://scripts/swamp.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Crocodile.tscn" id="2"]
+
+[sub_resource type="PlaneMesh" id="WaterMesh"]
+size = Vector2(28, 28)
+
+[sub_resource type="StandardMaterial3D" id="WaterMat"]
+transparency = 1
+albedo_color = Color(0.1, 0.26, 0.07, 0.8)
+
+[sub_resource type="BoxShape3D" id="ZoneShape"]
+size = Vector3(28, 1.2910156, 28)
+
+[node name="Swamp" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WaterMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("WaterMesh")
+surface_material_override/0 = SubResource("WaterMat")
+
+[node name="WaterZone" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="WaterZone"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.8544922, 0)
+shape = SubResource("ZoneShape")
+
+[node name="Crocodiles" type="Node3D" parent="."]
+
+[node name="Croc_1" parent="Crocodiles" instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0.4, 4)
+
+[node name="Croc_2" parent="Crocodiles" instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.4, -7)
+
+[node name="Croc_3" parent="Crocodiles" instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 0.4, -4)
+
+[node name="Croc_4" parent="Crocodiles" instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0.4, 5)

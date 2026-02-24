@@ -1,0 +1,44 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/crocodile.gd" id="1"]
+
+; ── Body – elongated dark-green box ──────────────────────────────────────────
+[sub_resource type="BoxMesh" id="BodyMesh"]
+size = Vector3(0.65, 0.28, 2.0)
+
+; ── Head/snout – slightly narrower box offset forward ────────────────────────
+[sub_resource type="BoxMesh" id="HeadMesh"]
+size = Vector3(0.50, 0.22, 0.85)
+
+; ── Shared bark-green material ────────────────────────────────────────────────
+[sub_resource type="StandardMaterial3D" id="CrocMat"]
+albedo_color = Color(0.13, 0.26, 0.09, 1)
+
+; ── Bite kill sphere – centred just past the snout tip ───────────────────────
+[sub_resource type="SphereShape3D" id="BiteShape"]
+radius = 1.6
+
+; ─────────────────────────────────────────────────────────────────────────────
+; ROOT – plain Node3D so the croc has no physics and glides on the water.
+; crocodile.gd locks position.y to water_y every frame.
+; The croc faces -Z (Godot forward); head is at z = -1.25 (in front).
+; ─────────────────────────────────────────────────────────────────────────────
+[node name="Crocodile" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+mesh = SubResource("BodyMesh")
+surface_material_override/0 = SubResource("CrocMat")
+
+; Head offset: slightly raised (y+0.02) and pushed forward (z-1.25).
+[node name="Head" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -1.25)
+mesh = SubResource("HeadMesh")
+surface_material_override/0 = SubResource("CrocMat")
+
+; BiteZone at snout tip – kills any Player that enters.
+[node name="BiteZone" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.5)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BiteZone"]
+shape = SubResource("BiteShape")

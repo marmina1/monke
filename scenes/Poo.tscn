@@ -1,0 +1,42 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/poo.gd" id="1"]
+
+; ── Visual ────────────────────────────────────────────────────────────────────
+[sub_resource type="SphereMesh" id="PooMesh"]
+radius = 0.18
+height = 0.36
+
+[sub_resource type="StandardMaterial3D" id="PooMat"]
+albedo_color = Color(0.28, 0.15, 0.04, 1)
+
+; ── Physics collision (tight, matches visual) ─────────────────────────────────
+[sub_resource type="SphereShape3D" id="PooPhysShape"]
+radius = 0.18
+
+; ── Hit detection (generously larger so mid-air passes register) ─────────────
+[sub_resource type="SphereShape3D" id="HitShape"]
+radius = 0.55
+
+; ─────────────────────────────────────────────────────────────────────────────
+; ROOT – RigidBody3D.  Starts frozen (held in hand), unfreezes on throw().
+; gravity_scale = 1.2 gives a slightly heavier, more satisfying arc.
+; collision_layer = 1 → hits the world and the player character body.
+; ─────────────────────────────────────────────────────────────────────────────
+[node name="Poo" type="RigidBody3D"]
+script = ExtResource("1")
+gravity_scale = 1.2
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("PooMesh")
+surface_material_override/0 = SubResource("PooMat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("PooPhysShape")
+
+; Hit zone – only monitors layer 1 (players + world).
+[node name="HitZone" type="Area3D" parent="."]
+collision_mask = 1
+
+[node name="HitShape" type="CollisionShape3D" parent="HitZone"]
+shape = SubResource("HitShape")

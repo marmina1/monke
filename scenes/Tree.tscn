@@ -1,0 +1,49 @@
+[gd_scene load_steps=6 format=3]
+
+; ── Trunk – tapered cylinder, dark bark colour ────────────────────────────────
+[sub_resource type="CylinderMesh" id="TrunkMesh"]
+top_radius = 0.38
+bottom_radius = 0.62
+height = 16.0
+radial_segments = 8
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="BarkMat"]
+albedo_color = Color(0.28, 0.16, 0.06, 1)
+
+; ── Canopy – rough sphere, forest green ───────────────────────────────────────
+[sub_resource type="SphereMesh" id="CanopyMesh"]
+radius = 3.2
+height = 6.4
+radial_segments = 12
+rings = 7
+
+[sub_resource type="StandardMaterial3D" id="LeavesMat"]
+albedo_color = Color(0.11, 0.44, 0.12, 1)
+
+; ── Collision – matches trunk only (players push off the trunk surface) ───────
+[sub_resource type="CylinderShape3D" id="TrunkShape"]
+radius = 0.60
+height = 16.0
+
+; ─────────────────────────────────────────────────────────────────────────────
+; ROOT – StaticBody3D so hand rays (collision_mask=1, layer=1) hit it and
+; the push system fires automatically without any code changes.
+; The trunk mesh/collision centre is at y=8 (half-height) so the base
+; of the tree sits exactly at y=0 (world ground level).
+; ─────────────────────────────────────────────────────────────────────────────
+[node name="Tree" type="StaticBody3D"]
+
+[node name="Trunk" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+mesh = SubResource("TrunkMesh")
+surface_material_override/0 = SubResource("BarkMat")
+
+[node name="Canopy" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 18, 0)
+mesh = SubResource("CanopyMesh")
+surface_material_override/0 = SubResource("LeavesMat")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 8, 0)
+shape = SubResource("TrunkShape")

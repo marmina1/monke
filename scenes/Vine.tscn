@@ -1,0 +1,34 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/vine.gd" id="1"]
+
+; Placeholder mesh – hidden at runtime, replaced by procedural chain segments.
+[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
+top_radius = 0.05
+bottom_radius = 0.09
+height = 6.0
+radial_segments = 6
+rings = 1
+
+; Dark jungle-green material.
+[sub_resource type="StandardMaterial3D" id="Material_Vine"]
+albedo_color = Color(0.18, 0.38, 0.07, 1)
+
+; ─────────────────────────────────────────────────────────────────────────────
+; ROOT  –  Node3D  (NOT a physics body)
+;   Collision is handled by per-link VineLink (AnimatableBody3D) nodes that
+;   vine.gd spawns at runtime on layer 2 so CharacterBody3D never collides
+;   with them, while the player's VineRay (mask 3) still detects them.
+; ─────────────────────────────────────────────────────────────────────────────
+[node name="Vine" type="Node3D"]
+script = ExtResource("1")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("CylinderMesh_1")
+surface_material_override/0 = SubResource("Material_Vine")
+
+; Fixed ceiling anchor – the very top of the vine (y = VINE_LENGTH / 2 = 3.0).
+; vine.gd pins the first verlet node to this world position every sim step.
+; The player also uses this as the pendulum pivot when swinging.
+[node name="GrabPoint" type="Marker3D" parent="."]
+position = Vector3(0, 3.0, 0)

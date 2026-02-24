@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3 uid="uid://d0hf6nwjqlk76"]
+
+[ext_resource type="Script" uid="uid://dpulxjfuku167" path="res://scripts/player.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/Hand.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/HUD.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/Poo.tscn" id="5"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+height = 1.8
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_vine"]
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1")
+poo_scene = ExtResource("5")
+poo_throw_force = 1.0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="Head" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
+
+[node name="Camera3D" type="Camera3D" parent="Head"]
+
+[node name="LeftHandRay" type="RayCast3D" parent="Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35, -0.2, 0)
+target_position = Vector3(0, 0, -2.5)
+
+[node name="RightHandRay" type="RayCast3D" parent="Head"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, -0.2, 0)
+target_position = Vector3(0, 0, -2.5)
+
+[node name="VineRay" type="ShapeCast3D" parent="Head"]
+shape = SubResource("SphereShape3D_vine")
+target_position = Vector3(0, 0, -4.5)
+collision_mask = 3
+
+[node name="LeftHand" parent="Head" instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.35, -0.2, 0)
+
+[node name="RightHand" parent="Head" instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, -0.2, 0)
+
+[node name="HungerDeathTimer" type="Timer" parent="."]
+wait_time = 10.0
+one_shot = true
+
+[node name="HUD" parent="." instance=ExtResource("4")]

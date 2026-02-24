@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/hand.gd" id="1"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_1"]
+top_radius = 0.035
+bottom_radius = 0.055
+height = 1.0
+radial_segments = 5
+rings = 1
+
+; Warm brown – low-poly monkey arm colour.
+[sub_resource type="StandardMaterial3D" id="Material_Hand"]
+albedo_color = Color(0.52, 0.30, 0.12, 1)
+roughness = 0.9
+
+; ─────────────────────────────────────────────────────────────────────────────
+; ROOT  –  Node3D
+;   Positioned at the hand origin (shoulder) relative to Head.
+;   hand.gd controls all rotation and scaling at runtime.
+; ─────────────────────────────────────────────────────────────────────────────
+[node name="Hand" type="Node3D"]
+script = ExtResource("1")
+
+; Pivot is rotated by hand.gd to aim at the vine / tip position.
+[node name="Pivot" type="Node3D" parent="."]
+
+; ArmMesh – hand.gd sets rotation_degrees.x = -90 in _ready() so
+; the cylinder's height axis aligns with Pivot's -Z (forward reach).
+[node name="ArmMesh" type="MeshInstance3D" parent="Pivot"]
+mesh = SubResource("CylinderMesh_1")
+surface_material_override/0 = SubResource("Material_Hand")
