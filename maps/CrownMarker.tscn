@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://crownmark01"]
+
+[node name="CrownMarker" type="Node3D"]
+
+[node name="Crown" type="Label3D" parent="."]
+position = Vector3(0, 2.2, 0)
+text = "👑"
+font_size = 72
+billboard = 1
+no_depth_test = true
+render_priority = 1

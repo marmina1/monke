@@ -6,19 +6,21 @@ extends Node
 var hunger_enabled : bool = true
 var ground_enemies_enabled : bool = true
 var selected_map : String = "res://maps/SwampForest.tscn"
-var selected_gamemode : String = ""
+var selected_gamemode : String = "Last Person Standing"
 var selected_buff : String = ""
 var round_count : int = 3
 
 # ── LPS match state (persists across rounds / scene changes) ────────────────
-var lps_scores        : Dictionary = {}   # peer_id → cumulative points
-var lps_current_round : int        = 0    # last completed round number
-var lps_match_active  : bool       = false
+var lps_scores         : Dictionary = {}   # peer_id → cumulative points
+var lps_current_round  : int        = 0    # last completed round number
+var lps_match_active   : bool       = false
+var lps_match_complete : bool       = false   # all rounds done; next selection → lobby
 
 func lps_clear() -> void:
 	lps_scores.clear()
-	lps_current_round = 0
-	lps_match_active = false
+	lps_current_round  = 0
+	lps_match_active   = false
+	lps_match_complete = false
 
 # ── Player ──────────────────────────────────────────────────
 var player_name : String = "Player"

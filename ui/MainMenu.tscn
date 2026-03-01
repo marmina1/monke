@@ -91,7 +91,7 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.72, 0.45, 0.85)
 theme_override_font_sizes/font_size = 18
-text = "Swing.  Survive.  Eat."
+text = "need banana"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="CenterContainer/VBoxContainer" unique_id=1605596907]

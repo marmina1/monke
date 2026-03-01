@@ -85,7 +85,7 @@ func _pick_position() -> Vector3:
 	)
 
 
-func _on_banana_collected(_amount: float, banana: Node3D) -> void:
+func _on_banana_collected(_picker: Node3D, _amount: float, banana: Node3D) -> void:
 	_bananas.erase(banana)
 	# Wait, then spawn a replacement.
 	get_tree().create_timer(respawn_delay).timeout.connect(_spawn_one)

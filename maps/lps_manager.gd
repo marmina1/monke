@@ -1,15 +1,24 @@
 extends Node
 
 ## Last Person Standing gamemode manager.
-## Features: rounds, time limit, sudden death (floor = death, fewer bananas),
+## Features: rounds, time limit, sudden death (rising lava plane),
 ## spectator camera for dead players, podium between rounds, alive-count HUD.
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# ── Config ─────────────────────────────────────────────────────────────────────
 var total_rounds       : int   = 3
 var current_round      : int   = 0
 var round_time_limit   : float = 120.0   ## seconds per round before sudden death
 var _round_timer       : float = 0.0
 var _deathmatch_active : bool  = false
+
+# ── Lava plane (sudden death) ─────────────────────────────────────────────────────
+var _kill_y           : float         = -999.0  # current lava height (host)
+var _lava_rise_speed  : float         = 0.0     # m/s, accelerates after start
+var _lava_plane       : MeshInstance3D = null   # visual on every peer
+const _LAVA_START_Y   : float         = -40.0   # well below all maps
+const _LAVA_RISE_ACCEL : float        = 0.08    # m/s² acceleration
+const _LAVA_RISE_MAX  : float         = 5.0     # terminal velocity m/s
+const _LAVA_KILL_ABOVE : float        = 1.8     # kill when player Y < lava_y + this
 
 # ── State ─────────────────────────────────────────────────────────────────────
 var _alive_peers   : Array[int] = []     # peer IDs still alive this round
@@ -77,16 +86,24 @@ func _process(delta: float) -> void:
 			_refresh_spectate_targets()
 			_update_spectate_hud()
 
-	# ── Deathmatch: floor kills ──────────────────────────────────────────
-	if _deathmatch_active and Lobby.is_host():
-		var players_container : Node = get_parent().get_node_or_null("Players")
-		if players_container:
-			for child : Node in players_container.get_children():
-				if child is Player and not child.is_dead:
-					if child.is_on_floor():
-						var pid : int = child.get_multiplayer_authority()
-						rpc("_rpc_force_kill", pid)
-						_rpc_force_kill(pid)
+	# ── Deathmatch: rising lava ───────────────────────────────────
+	if _deathmatch_active:
+		# Raise the lava.
+		if Lobby.is_host():
+			_lava_rise_speed = minf(_lava_rise_speed + _LAVA_RISE_ACCEL * delta, _LAVA_RISE_MAX)
+			_kill_y += _lava_rise_speed * delta
+			# Broadcast new height to all clients (and update locally via call_local).
+			rpc("_rpc_sync_lava", _kill_y)
+		# Host kills players below the lava.
+		if Lobby.is_host():
+			var players_container : Node = get_parent().get_node_or_null("Players")
+			if players_container:
+				for child : Node in players_container.get_children():
+					if child is Player and not child.is_dead:
+						if child.global_position.y < _kill_y + _LAVA_KILL_ABOVE:
+							var pid : int = child.get_multiplayer_authority()
+							rpc("_rpc_force_kill", pid)
+							_rpc_force_kill(pid)
 
 
 func _input(event: InputEvent) -> void:
@@ -109,6 +126,10 @@ func _start_round() -> void:
 	_round_active = true
 	_deathmatch_active = false
 	_round_timer = round_time_limit
+	# Clean up lava from the previous round.
+	_destroy_lava_plane()
+	_kill_y          = -999.0
+	_lava_rise_speed = 0.0
 	_alive_peers.clear()
 	_all_peer_ids.clear()
 	_death_order.clear()
@@ -202,11 +223,47 @@ func _on_server_closed() -> void:
 @rpc("authority", "reliable", "call_remote")
 func _rpc_start_deathmatch() -> void:
 	_deathmatch_active = true
+	_kill_y            = _LAVA_START_Y
+	_lava_rise_speed   = 0.5   # starts slow, accelerates
 	# Update HUD.
 	if _local_player and _local_player.hud:
 		_local_player.hud.show_deathmatch_warning()
 	# Reduce banana spawning.
 	_reduce_bananas()
+	# Spawn the lava visual on every peer.
+	_spawn_lava_plane()
+
+
+@rpc("authority", "unreliable", "call_local")
+func _rpc_sync_lava(y_pos: float) -> void:
+	_kill_y = y_pos
+	if _lava_plane and is_instance_valid(_lava_plane):
+		_lava_plane.global_position.y = y_pos
+
+
+func _spawn_lava_plane() -> void:
+	if _lava_plane:
+		return
+	var mesh := PlaneMesh.new()
+	mesh.size = Vector2(400.0, 400.0)
+	var mat  := StandardMaterial3D.new()
+	mat.albedo_color         = Color(1.0, 0.30, 0.0, 0.90)
+	mat.emission_enabled     = true
+	mat.emission             = Color(1.0, 0.20, 0.0)
+	mat.emission_energy_multiplier = 2.5
+	mat.transparency         = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_lava_plane = MeshInstance3D.new()
+	_lava_plane.name = "LavaPlane"
+	_lava_plane.mesh = mesh
+	_lava_plane.set_surface_override_material(0, mat)
+	_lava_plane.global_position = Vector3(0.0, _LAVA_START_Y, 0.0)
+	get_parent().add_child(_lava_plane)
+
+
+func _destroy_lava_plane() -> void:
+	if _lava_plane and is_instance_valid(_lava_plane):
+		_lava_plane.queue_free()
+	_lava_plane = null
 
 
 func _reduce_bananas() -> void:
@@ -235,19 +292,28 @@ func _rpc_round_over(winner_id : int, updated_scores : Dictionary) -> void:
 	_scores = updated_scores
 
 	_stop_spectating()
+	_freeze_local_player()
 
-	# Check if match is over.
+	# Mark match complete when all rounds are done.
 	if current_round >= total_rounds:
-		_show_podium(true, winner_id)
-		await get_tree().create_timer(6.0).timeout
-		_end_match()
-	else:
-		_show_podium(false, winner_id)
-		# Save match state so it persists across scene change.
-		_save_match_state()
-		await get_tree().create_timer(5.0).timeout
-		_hide_podium()
+		if has_node("/root/GameSettings"):
+			get_node("/root/GameSettings").lps_match_complete = true
+
+	# Save scores/round so the selection-screen leaderboard can read them.
+	_save_match_state()
+
+	# Brief pause so the final kill registers visually, then hand off to selection screen.
+	await get_tree().create_timer(1.0).timeout
+	if is_inside_tree():
 		_go_to_selection()
+
+
+## Stop the local player's hunger timer so they can’t die during the scene transition.
+func _freeze_local_player() -> void:
+	if _local_player and is_instance_valid(_local_player) and not _local_player.is_dead:
+		if _local_player.hunger_death_timer and \
+				not _local_player.hunger_death_timer.is_queued_for_deletion():
+			_local_player.hunger_death_timer.stop()
 
 
 ## Host-only: compute placement points for this round.
@@ -317,13 +383,110 @@ func _show_podium(is_final: bool, round_winner_id: int) -> void:
 
 	_podium_layer.visible = true
 
-	# Animate camera to look at the winner's player node.
+	# Camera + celebration.
 	if round_winner_id >= 0:
 		var players_container : Node = get_parent().get_node_or_null("Players")
 		if players_container:
 			var winner_node : Node = players_container.get_node_or_null("Player_%d" % round_winner_id)
 			if winner_node and winner_node is Player:
-				_animate_podium_camera(winner_node as Player)
+				if is_final:
+					_celebrate_winner(winner_node as Player)
+				else:
+					_animate_podium_camera(winner_node as Player)
+
+
+## Final-match celebration: spotlight, confetti, cinematic camera crane.
+func _celebrate_winner(winner: Player) -> void:
+	# ─ Animated spotlight from above ─
+	var spot := SpotLight3D.new()
+	spot.name   = "CelebSpot"
+	spot.light_color  = Color(1.0, 0.92, 0.65)   # warm cream white
+	spot.light_energy = 0.0
+	spot.spot_angle   = 22.0
+	spot.spot_range   = 28.0
+	spot.shadow_enabled = false
+	spot.global_position = winner.global_position + Vector3(0.0, 18.0, 0.0)
+	spot.look_at(winner.global_position + Vector3.UP * 0.8)
+	get_parent().add_child(spot)
+
+	# Fade spotlight in.
+	var spot_tw := create_tween()
+	spot_tw.tween_property(spot, "light_energy", 5.0, 1.2).set_trans(Tween.TRANS_SINE)
+
+	# Slowly lower the spotlight toward the winner.
+	var spot_lower := create_tween()
+	spot_lower.tween_property(spot, "global_position",
+		winner.global_position + Vector3(0.0, 9.0, 0.0), 3.5).set_trans(Tween.TRANS_CUBIC)
+
+	# ─ Cinematic camera: start high and crane down ─
+	if not _spectate_camera:
+		_spectate_camera = Camera3D.new()
+		_spectate_camera.name = "SpectateCamera"
+		get_parent().add_child(_spectate_camera)
+	_spectate_camera.current = true
+	var start_pos := winner.global_position + Vector3(0.0, 14.0, 0.0)
+	var end_pos   := winner.global_position + Vector3(3.5, 3.0, 5.5)
+	_spectate_camera.global_position = start_pos
+	_spectate_camera.look_at(winner.global_position + Vector3.UP * 0.8)
+	var cam_tw := create_tween()
+	cam_tw.set_ease(Tween.EASE_IN_OUT)
+	cam_tw.tween_method(
+		func(t: float) -> void:
+			if is_instance_valid(_spectate_camera) and is_instance_valid(winner):
+				_spectate_camera.global_position = start_pos.lerp(end_pos, t)
+				_spectate_camera.look_at(winner.global_position + Vector3.UP * 0.8),
+		0.0, 1.0, 4.0)
+
+	# ─ Confetti (2D canvas) ─
+	var layer := CanvasLayer.new()
+	layer.name  = "ConfettiLayer"
+	layer.layer = 8
+	get_parent().add_child(layer)
+
+	var vp_size : Vector2 = get_viewport().get_visible_rect().size
+	var origins : Array[Vector2] = [
+		Vector2(vp_size.x * 0.5, -20.0),
+		Vector2(80.0,           vp_size.y * 0.35),
+		Vector2(vp_size.x - 80.0, vp_size.y * 0.35),
+	]
+	var spreads : Array[float] = [180.0, 70.0, 70.0]
+
+	for k : int in origins.size():
+		var p := CPUParticles2D.new()
+		p.emitting               = true
+		p.amount                 = 60
+		p.lifetime               = 3.2
+		p.explosiveness          = 0.55
+		p.spread                 = spreads[k]
+		p.gravity                = Vector2(0.0, 280.0)
+		p.initial_velocity_min   = 90.0
+		p.initial_velocity_max   = 280.0
+		p.angular_velocity_min   = -240.0
+		p.angular_velocity_max   = 240.0
+		p.scale_amount_min       = 5.0
+		p.scale_amount_max       = 11.0
+		p.one_shot               = true
+		p.position               = origins[k]
+		var grad := Gradient.new()
+		grad.colors = PackedColorArray([
+			Color(1.0, 0.85, 0.0),
+			Color(1.0, 0.25, 0.25),
+			Color(0.25, 0.80, 1.0),
+			Color(0.25, 1.00, 0.45),
+		])
+		p.color_ramp = grad
+		layer.add_child(p)
+
+	# ─ Pulse the podium title ─
+	var scale_tw := create_tween()
+	scale_tw.set_loops(4)
+	scale_tw.tween_property(_podium_label, "scale", Vector2(1.08, 1.08), 0.35)
+	scale_tw.tween_property(_podium_label, "scale", Vector2.ONE,         0.35)
+
+	# Clean up after the podium timeout.
+	await get_tree().create_timer(8.0).timeout
+	if is_instance_valid(spot):  spot.queue_free()
+	if is_instance_valid(layer): layer.queue_free()
 
 
 func _hide_podium() -> void:
@@ -394,10 +557,9 @@ func _start_spectating() -> void:
 	_spectating = true
 	_refresh_spectate_targets()
 
-	if _spectate_targets.is_empty():
-		return
-
-	# Create spectator camera if needed.
+	# Always create and activate the spectate camera, even when no targets exist
+	# yet (e.g. solo test or simultaneous deaths). The process loop will follow
+	# a target as soon as one becomes available.
 	if not _spectate_camera:
 		_spectate_camera = Camera3D.new()
 		_spectate_camera.name = "SpectateCamera"
@@ -458,7 +620,7 @@ func _update_spectate_hud() -> void:
 	if not _local_player or not _local_player.hud:
 		return
 	if _spectate_targets.is_empty():
-		_local_player.hud.show_spectating("No one")
+		_local_player.hud.show_spectating("Waiting for others...")
 		return
 	_spectate_index = clampi(_spectate_index, 0, _spectate_targets.size() - 1)
 	var target : Player = _spectate_targets[_spectate_index]
@@ -479,6 +641,12 @@ func _respawn_all() -> void:
 	for child : Node in players_container.get_children():
 		if child is Player:
 			child.is_dead = false
+			# Restore all hidden visuals.
+			if child.has_node("Head"):
+				child.get_node("Head").visible = true
+			var name_lbl : Node = child.get_node_or_null("NameLabel3D")
+			if name_lbl and not child.is_local:
+				name_lbl.visible = true
 			if child.has_node("PuppetBody"):
 				child.get_node("PuppetBody").visible = not child.is_local
 			child.velocity = Vector3.ZERO
@@ -505,14 +673,13 @@ func _respawn_all() -> void:
 
 func _end_match() -> void:
 	_hide_podium()
-	# Clear persisted LPS state.
 	if has_node("/root/GameSettings"):
-		var gs : Node = get_node("/root/GameSettings")
-		gs.lps_clear()
+		get_node("/root/GameSettings").lps_clear()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	if Lobby.is_host():
-		Lobby.disconnect_lobby()
-	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+	# Return to lobby keeping the connection alive.
+	# (Selection screen normally handles this via _rpc_end_to_lobby;
+	#  this fallback path is kept for safety.)
+	get_tree().change_scene_to_file("res://multiplayer/LobbyRoom.tscn")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -561,6 +728,4 @@ func _hide_round_banner() -> void:
 # ══════════════════════════════════════════════════════════════════════════════
 
 func _peer_name(peer_id : int) -> String:
-	if Lobby.players.has(peer_id):
-		return str(Lobby.players[peer_id]["name"])
-	return "Player %d" % peer_id
+	return Lobby.display_name(peer_id)

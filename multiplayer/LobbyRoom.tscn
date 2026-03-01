@@ -51,9 +51,16 @@ theme_override_font_sizes/font_size = 20
 
 [node name="IPLabel" type="Label" parent="UILayer/TopBar"]
 layout_mode = 2
-text = "IP: ..."
-theme_override_font_sizes/font_size = 20
+custom_minimum_size = Vector2(420, 0)
+text = "IP: fetching…"
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(0.7, 0.85, 1, 0.9)
+
+[node name="ShowIPBtn" type="Button" parent="UILayer/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(65, 30)
+text = "Show"
+theme_override_font_sizes/font_size = 14
 
 [node name="BottomBar" type="HBoxContainer" parent="UILayer"]
 anchors_preset = 12

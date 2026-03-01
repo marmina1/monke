@@ -14,7 +14,7 @@ extends Node3D
 # ── Signals ────────────────────────────────────────────────────────────────────
 ## Fired just before the banana removes itself.
 ## Useful for spawners / score trackers later.
-signal picked_up(amount: float)
+signal picked_up(picker: Node3D, amount: float)
 
 # ── Internal state ─────────────────────────────────────────────────────────────
 ## True once a player has touched this banana. Guards against duplicate triggers
@@ -53,6 +53,10 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 
 	_collected = true
-	body.add_hunger(hunger_amount)
-	picked_up.emit(hunger_amount)
+	# In Banana Frenzy, points are awarded by the manager — skip hunger.
+	var gs : Node = Engine.get_singleton("GameSettings") if Engine.has_singleton("GameSettings") else get_node_or_null("/root/GameSettings")
+	var is_bf : bool = gs != null and gs.selected_gamemode == "Banana Frenzy"
+	if not is_bf:
+		body.add_hunger(hunger_amount)
+	picked_up.emit(body, hunger_amount)
 	queue_free()

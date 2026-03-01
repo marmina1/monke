@@ -1,6 +1,9 @@
 [gd_scene format=3 uid="uid://c03ubts3uga8r"]
 
 [ext_resource type="Script" uid="uid://dcp4eb8b8usw5" path="res://multiplayer/selection_screen.gd" id="1"]
+[ext_resource type="PackedScene" path="res://multiplayer/CardUIGM.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://multiplayer/CardUIMap.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://multiplayer/CardUIBuff.tscn" id="4"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -121,20 +124,94 @@ _data = {
 &"pivot_to_map": SubResource("pivot_to_map")
 }
 
-[sub_resource type="BoxMesh" id="card_mesh"]
-size = Vector3(2, 2.8, 0.1)
+[sub_resource type="QuadMesh" id="card_mesh"]
+resource_local_to_scene = true
+flip_faces = true
+size = Vector2(2, 2.8)
 
-[sub_resource type="StandardMaterial3D" id="card_mat_gm"]
-albedo_color = Color(0.15, 0.55, 0.85, 1)
+[sub_resource type="ViewportTexture" id="vptex_gm1"]
+viewport_path = NodePath("Stations/GamemodeStation/Card1/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_gm1"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("vptex_gm1")
 
 [sub_resource type="BoxShape3D" id="card_shape"]
 size = Vector3(2, 2.8, 0.12)
 
-[sub_resource type="StandardMaterial3D" id="card_mat_map"]
-albedo_color = Color(0.2, 0.7, 0.3, 1)
+[sub_resource type="ViewportTexture" id="vptex_gm2"]
+viewport_path = NodePath("Stations/GamemodeStation/Card2/CardVP")
 
-[sub_resource type="StandardMaterial3D" id="card_mat_buff"]
-albedo_color = Color(0.85, 0.6, 0.15, 1)
+[sub_resource type="StandardMaterial3D" id="mat_gm2"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("vptex_gm2")
+
+[sub_resource type="ViewportTexture" id="vptex_gm3"]
+viewport_path = NodePath("Stations/GamemodeStation/Card3/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_gm3"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("vptex_gm3")
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_l87an"]
+viewport_path = NodePath("Stations/MapStation/Card1/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_map1"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("ViewportTexture_l87an")
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_cbfxo"]
+viewport_path = NodePath("Stations/MapStation/Card2/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_map2"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("ViewportTexture_cbfxo")
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_kg6bb"]
+viewport_path = NodePath("Stations/MapStation/Card3/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_map3"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("ViewportTexture_kg6bb")
+
+[sub_resource type="ViewportTexture" id="vptex_buf1"]
+viewport_path = NodePath("Stations/BuffStation/Card1/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_buf1"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("vptex_buf1")
+
+[sub_resource type="ViewportTexture" id="vptex_buf2"]
+viewport_path = NodePath("Stations/BuffStation/Card2/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_buf2"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("vptex_buf2")
+
+[sub_resource type="ViewportTexture" id="vptex_buf3"]
+viewport_path = NodePath("Stations/BuffStation/Card3/CardVP")
+
+[sub_resource type="StandardMaterial3D" id="mat_buf3"]
+resource_local_to_scene = true
+cull_mode = 0
+uv1_scale = Vector3(-1, 1, 1)
+albedo_texture = SubResource("vptex_buf3")
 
 [node name="SelectionScreen" type="Node3D" unique_id=502117735]
 script = ExtResource("1")
@@ -151,7 +228,8 @@ environment = SubResource("env")
 
 [node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=1588720379]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.014530182, 2.4716792, -0.028404236)
-omni_range = 20.001871
+omni_range = 28.717
+omni_attenuation = -0.159
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1927817995]
 libraries/ = SubResource("anim_lib")
@@ -166,7 +244,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/GamemodeStation/Card1" unique_id=307604214]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_gm")
+surface_material_override/0 = SubResource("mat_gm1")
 
 [node name="Area3D" type="Area3D" parent="Stations/GamemodeStation/Card1" unique_id=1278222411]
 
@@ -175,16 +253,19 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/GamemodeStation/Card1" unique_id=526121915]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Tag"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/GamemodeStation/Card1" unique_id=1359375404 instance=ExtResource("2")]
 
 [node name="Card2" type="Node3D" parent="Stations/GamemodeStation" unique_id=1663654953]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/GamemodeStation/Card2" unique_id=912443782]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_gm")
+surface_material_override/0 = SubResource("mat_gm2")
 
 [node name="Area3D" type="Area3D" parent="Stations/GamemodeStation/Card2" unique_id=532569430]
 
@@ -193,16 +274,19 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/GamemodeStation/Card2" unique_id=1366981884]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Mode 2"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/GamemodeStation/Card2" unique_id=417936957 instance=ExtResource("2")]
 
 [node name="Card3" type="Node3D" parent="Stations/GamemodeStation" unique_id=990567865]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/GamemodeStation/Card3" unique_id=134525914]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_gm")
+surface_material_override/0 = SubResource("mat_gm3")
 
 [node name="Area3D" type="Area3D" parent="Stations/GamemodeStation/Card3" unique_id=1715376011]
 
@@ -211,9 +295,12 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/GamemodeStation/Card3" unique_id=888381214]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Mode 3"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/GamemodeStation/Card3" unique_id=1630972130 instance=ExtResource("2")]
 
 [node name="MapStation" type="Node3D" parent="Stations" unique_id=1488454316]
 transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -7, 0, 0)
@@ -223,7 +310,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/MapStation/Card1" unique_id=893504403]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_map")
+surface_material_override/0 = SubResource("mat_map1")
 
 [node name="Area3D" type="Area3D" parent="Stations/MapStation/Card1" unique_id=1523335255]
 
@@ -232,16 +319,19 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/MapStation/Card1" unique_id=1251996666]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Map 1"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/MapStation/Card1" unique_id=1003244776 instance=ExtResource("3")]
 
 [node name="Card2" type="Node3D" parent="Stations/MapStation" unique_id=179417146]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/MapStation/Card2" unique_id=652661179]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_map")
+surface_material_override/0 = SubResource("mat_map2")
 
 [node name="Area3D" type="Area3D" parent="Stations/MapStation/Card2" unique_id=2051516883]
 
@@ -250,16 +340,19 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/MapStation/Card2" unique_id=670292359]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Map 2"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/MapStation/Card2" unique_id=1859295883 instance=ExtResource("3")]
 
 [node name="Card3" type="Node3D" parent="Stations/MapStation" unique_id=411257327]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/MapStation/Card3" unique_id=1865742568]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_map")
+surface_material_override/0 = SubResource("mat_map3")
 
 [node name="Area3D" type="Area3D" parent="Stations/MapStation/Card3" unique_id=1768071652]
 
@@ -268,9 +361,12 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/MapStation/Card3" unique_id=2092587827]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Map 3"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/MapStation/Card3" unique_id=556573297 instance=ExtResource("3")]
 
 [node name="BuffStation" type="Node3D" parent="Stations" unique_id=1738955216]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 7)
@@ -280,7 +376,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/BuffStation/Card1" unique_id=344617997]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_buff")
+surface_material_override/0 = SubResource("mat_buf1")
 
 [node name="Area3D" type="Area3D" parent="Stations/BuffStation/Card1" unique_id=797995046]
 
@@ -289,16 +385,19 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/BuffStation/Card1" unique_id=2057283803]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Buff 1"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/BuffStation/Card1" unique_id=50806201 instance=ExtResource("4")]
 
 [node name="Card2" type="Node3D" parent="Stations/BuffStation" unique_id=1971353938]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/BuffStation/Card2" unique_id=686182877]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_buff")
+surface_material_override/0 = SubResource("mat_buf2")
 
 [node name="Area3D" type="Area3D" parent="Stations/BuffStation/Card2" unique_id=269134091]
 
@@ -307,16 +406,19 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/BuffStation/Card2" unique_id=1417241092]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Buff 2"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/BuffStation/Card2" unique_id=1814567575 instance=ExtResource("4")]
 
 [node name="Card3" type="Node3D" parent="Stations/BuffStation" unique_id=1020688672]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 1.5, 0)
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/BuffStation/Card3" unique_id=91457983]
 mesh = SubResource("card_mesh")
-surface_material_override/0 = SubResource("card_mat_buff")
+surface_material_override/0 = SubResource("mat_buf3")
 
 [node name="Area3D" type="Area3D" parent="Stations/BuffStation/Card3" unique_id=1942507382]
 
@@ -325,9 +427,12 @@ shape = SubResource("card_shape")
 
 [node name="Label3D" type="Label3D" parent="Stations/BuffStation/Card3" unique_id=759758129]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+visible = false
 text = "Buff 3"
 font_size = 38
 outline_size = 6
+
+[node name="CardVP" parent="Stations/BuffStation/Card3" unique_id=283291701 instance=ExtResource("4")]
 
 [node name="UILayer" type="CanvasLayer" parent="." unique_id=486888642]
 layer = 5

@@ -56,7 +56,11 @@ func update_starvation_timer(time_left: float) -> void:
 
 ## Called once by the player's `player_died` signal.
 func show_death_screen() -> void:
-	death_label.visible = true
+	death_label.visible   = true
+	# Hunger is irrelevant after death — hide it.
+	hunger_bar.visible       = false
+	hunger_label.visible     = false
+	starvation_label.visible = false
 
 
 ## White = nothing in range. Yellow = vine is grabbable.

@@ -24,6 +24,11 @@ config/icon="res://icon.svg"
 GameSettings="*res://scripts/game_settings.gd"
 Lobby="*res://multiplayer/lobby.gd"
 
+[display]
+
+window/size/mode=3
+window/size/resizable=false
+
 [editor]
 
 run/main_run_args="player2"

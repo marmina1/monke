@@ -8,7 +8,9 @@ extends Node3D
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 const ALL_GAMEMODES : Array[String] = [
-	"Tag", "Last Person Standing", "King of the Hill", "Race"
+	"Last Person Standing",
+	"Banana Frenzy",
+	"Tag",
 ]
 
 const ALL_MAPS : Dictionary = {
@@ -19,12 +21,12 @@ const ALL_MAPS : Dictionary = {
 }
 
 const ALL_BUFFS : Array[String] = [
-	"Banana Frenzy", "Golden Banana", "Iron Stomach",
+	"Golden Banana", "Iron Stomach",
 	"Monkey Speed", "Vine Master", "Poo Power",
 ]
 
 # ── State ─────────────────────────────────────────────────────────────────────
-enum Phase { INTRO, GAMEMODE, MAP, BUFF, LAUNCHING }
+enum Phase { INTRO, GAMEMODE, MAP, BUFF, LAUNCHING, LEADERBOARD }
 var current_phase  : int   = Phase.INTRO
 var _phase_timer   : float = 10.0
 var _can_select    : bool  = false
@@ -41,6 +43,10 @@ var chosen_buff     : String = ""
 
 # Current-phase votes: peer_id (int) → card_idx (int)
 var _current_votes : Dictionary = {}
+
+# Leaderboard.
+var _from_leaderboard    : bool   = false   ## arriving after a completed round
+var _leaderboard_station : Node3D = null    ## built at runtime
 
 # ── Node refs ─────────────────────────────────────────────────────────────────
 @onready var camera       : Camera3D        = $CameraPivot/Camera3D
@@ -72,12 +78,18 @@ var _current_votes : Dictionary = {}
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_setup_card_displays()
+	_setup_leaderboard_station()
+	# Hide 3-D Label3Ds — SubViewport card UIs replace them.
+	for card : Node3D in gm_cards + map_cards + buff_cards:
+		var lbl := card.get_node_or_null("Label3D")
+		if lbl:
+			lbl.visible = false
 
 	blackout.modulate.a = 0.0
 	gm_preview.text   = "Gamemode: ---"
 	map_preview.text  = "Map: ---"
 	buff_preview.text = "Buff: ---"
+	timer_label.text  = ""
 
 	for card : Node3D in gm_cards + map_cards + buff_cards:
 		var area : Area3D = card.get_node("Area3D")
@@ -93,20 +105,45 @@ func _ready() -> void:
 	# Host-disconnect.
 	Lobby.server_closed.connect(_on_server_closed)
 
+	var gs : Node = get_node_or_null("/root/GameSettings")
+	var has_prior_rounds : bool = gs != null and gs.lps_match_active
+
 	if Lobby.is_host():
 		_randomise_offerings()
 		_apply_labels()
-		title_label.text = "STARTING SOON..."
-		# Brief wait so all clients have time to load the scene.
-		await get_tree().create_timer(1.0).timeout
-		rpc("_rpc_sync_offerings", offered_gamemodes, offered_maps, offered_buffs)
-		_start_intro()
+
+		if has_prior_rounds:
+			# Show the inter-round (or final) leaderboard, then proceed.
+			title_label.text = ""
+			_populate_leaderboard()
+			await _show_leaderboard()
+			await get_tree().create_timer(5.0).timeout
+			if not is_inside_tree():
+				return
+			if gs.lps_match_complete:
+				# Match over — send everyone back to the lobby.
+				rpc("_rpc_end_to_lobby")
+				_end_to_lobby()
+				return
+			title_label.text = "STARTING SOON..."
+			await get_tree().create_timer(0.5).timeout
+			_from_leaderboard = true
+			rpc("_rpc_sync_offerings", offered_gamemodes, offered_maps, offered_buffs)
+			_start_intro()
+		else:
+			title_label.text = "STARTING SOON..."
+			await get_tree().create_timer(1.0).timeout
+			rpc("_rpc_sync_offerings", offered_gamemodes, offered_maps, offered_buffs)
+			_start_intro()
 	else:
 		title_label.text = "WAITING FOR HOST..."
+		if has_prior_rounds:
+			_populate_leaderboard()
+			_show_leaderboard()  # fire-and-forget tween for clients
 
 
 func _process(delta : float) -> void:
-	if current_phase == Phase.INTRO or current_phase == Phase.LAUNCHING:
+	if current_phase == Phase.INTRO or current_phase == Phase.LAUNCHING or current_phase == Phase.LEADERBOARD:
 		return
 	if not _can_select or _phase_decided:
 		return
@@ -120,59 +157,52 @@ func _process(delta : float) -> void:
 #  SETUP HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
 
-func _setup_card_displays() -> void:
-	for card : Node3D in gm_cards + map_cards + buff_cards:
-		# Hide the old Label3D from the .tscn.
-		var old_label : Label3D = card.get_node("Label3D")
-		old_label.visible = false
+## Thumbnail images for each selectable item.
+## Place PNG files at  res://assets/thumbnails/<filename>.png
+## Recommended resolution: 512 × 320 px (16:10 looks best on the card).
+const _THUMBNAILS : Dictionary = {
+	"Swamp Forest":         "res://assets/thumbnails/swamp_forest.png",
+	"Rainforest":           "res://assets/thumbnails/rainforest.png",
+	"Red Canyon":           "res://assets/thumbnails/red_canyon.png",
+	"Moon Forest":          "res://assets/thumbnails/moon_forest.png",
+	"Last Person Standing": "res://assets/thumbnails/lps.png",
+	"Banana Frenzy":        "res://assets/thumbnails/banana_frenzy.png",
+	"Tag":                  "res://assets/thumbnails/tag.png",
+	"Golden Banana":        "res://assets/thumbnails/golden_banana.png",
+	"Iron Stomach":         "res://assets/thumbnails/iron_stomach.png",
+	"Monkey Speed":         "res://assets/thumbnails/monkey_speed.png",
+	"Vine Master":          "res://assets/thumbnails/vine_master.png",
+	"Poo Power":            "res://assets/thumbnails/poo_power.png",
+}
 
-		# ── SubViewport for text rendering ─────────────────────────
-		var vp := SubViewport.new()
-		vp.name = "CardVP"
-		vp.size = Vector2i(256, 360)
-		vp.transparent_bg = true
-		vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+## Short flavour text shown on each card below the title.
+const _DESCRIPTIONS : Dictionary = {
+	"Last Person Standing":  "Be the last monkey alive.\nCollect bananas to survive starvation.\nEliminate others.",
+	"Banana Frenzy":         "Grab as many bananas as you can\nin 2 minutes!\nNo starvation — only points matter.",
+	"Tag":                   "One monkey is IT.\nTouch IT to pass the tag!\nScore points every second you're free.",
+	"Golden Banana":         "Eating bananas gives extra health.",
+	"Iron Stomach":          "Hunger drains much slower.",
+	"Monkey Speed":          "Everyone moves significantly faster.",
+	"Vine Master":           "Extended vine grab range.",
+	"Poo Power":             "Poo projectiles are larger & faster.",
+}
 
-		var title_lbl := Label.new()
-		title_lbl.name = "Title"
-		title_lbl.size = Vector2(256, 200)
-		title_lbl.position = Vector2(0, 20)
-		title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		title_lbl.add_theme_font_size_override("font_size", 38)
-		title_lbl.add_theme_color_override("font_color", Color.WHITE)
-		title_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		vp.add_child(title_lbl)
-
-		var vote_lbl := Label.new()
-		vote_lbl.name = "Votes"
-		vote_lbl.size = Vector2(256, 140)
-		vote_lbl.position = Vector2(0, 220)
-		vote_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vote_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		vote_lbl.add_theme_font_size_override("font_size", 22)
-		vote_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 0.7))
-		vote_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		vp.add_child(vote_lbl)
-
-		card.add_child(vp)
-
-		# ── Sprite3D billboard overlay ─────────────────────────────
-		var sprite := Sprite3D.new()
-		sprite.name = "CardSprite"
-		sprite.texture = vp.get_texture()
-		sprite.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		sprite.no_depth_test = true
-		sprite.render_priority = 1
-		sprite.double_sided = true
-		sprite.pixel_size = 0.008  # 256 * 0.008 ≈ 2.0m, 360 * 0.008 ≈ 2.88m
-		card.add_child(sprite)
+# Category theme colours used in the image area of each card type.
+const _CAT_COLORS : Array[Color] = [
+	Color(0.35, 0.15, 0.75),  # Gamemode – purple
+	Color(0.10, 0.50, 0.25),  # Map – green
+	Color(0.75, 0.45, 0.05),  # Buff – gold
+]
+const _CAT_LABELS : Array[String] = ["GAMEMODE", "MAP", "BUFF"]
 
 
 func _randomise_offerings() -> void:
-	var gm_pool := ALL_GAMEMODES.duplicate()
+	# Gamemode: shuffle available gamemodes, fill 3 slots (wrapping if fewer than 3).
+	var gm_pool : Array[String] = ALL_GAMEMODES.duplicate()
 	gm_pool.shuffle()
-	offered_gamemodes = [gm_pool[0], gm_pool[1], gm_pool[2]]
+	offered_gamemodes = []
+	for i : int in 3:
+		offered_gamemodes.append(gm_pool[i % gm_pool.size()])
 
 	var map_names : Array[String] = []
 	for k : String in ALL_MAPS.keys():
@@ -196,13 +226,36 @@ func _set_card_text(card : Node3D, text : String) -> void:
 	var vp : SubViewport = card.get_node("CardVP")
 	var title : Label = vp.get_node("Title")
 	title.text = text
+	# Description line (only Gamemode cards have this node).
+	var desc : Label = vp.get_node_or_null("Desc")
+	if desc:
+		desc.text = _DESCRIPTIONS.get(text, "")
+	# Load thumbnail if we have one for this item and the file exists.
+	var thumb : TextureRect = vp.get_node_or_null("Thumbnail")
+	if thumb == null:
+		return
+	if _THUMBNAILS.has(text) and ResourceLoader.exists(_THUMBNAILS[text]):
+		var tex := load(_THUMBNAILS[text]) as Texture2D
+		if tex:
+			thumb.texture = tex
+			thumb.visible = true
+			# Hide the colour watermark when a real image is present.
+			var img_area := vp.get_node_or_null("ImgArea")
+			if img_area:
+				img_area.visible = false
+			return
+	thumb.visible = false
 
 
 func _start_intro() -> void:
 	current_phase = Phase.INTRO
 	title_label.text = "CHOOSE GAMEMODE"
 	_can_select = false
-	anim_player.play("intro_to_gamemode")
+	if _from_leaderboard:
+		# Camera is already at the leaderboard pivot; sweep it to the gamemode station.
+		_tween_from_leaderboard_to_gamemode()
+	else:
+		anim_player.play("intro_to_gamemode")
 
 
 func _cards_for(phase : int) -> Array[Node3D]:
@@ -228,6 +281,8 @@ func _rpc_sync_offerings(gamemodes : Array, maps : Array, buffs : Array) -> void
 		offered_maps.append(str(m))
 	for b in buffs:
 		offered_buffs.append(str(b))
+	var _gs : Node = get_node_or_null("/root/GameSettings")
+	_from_leaderboard = _gs != null and _gs.lps_match_active
 	_apply_labels()
 	_start_intro()
 
@@ -307,8 +362,12 @@ func _reset_cards(cards : Array[Node3D]) -> void:
 		var mesh : MeshInstance3D = card.get_node("MeshInstance3D")
 		mesh.transparency = 0.0
 		var vp : SubViewport = card.get_node("CardVP")
-		var vote_lbl : Label = vp.get_node("Votes")
-		vote_lbl.text = ""
+		var votes_root : Node2D = vp.get_node("Votes")
+		for child : Node in votes_root.get_children():
+			child.queue_free()
+		var vote_count_lbl : Label = vp.get_node_or_null("VoteCount")
+		if vote_count_lbl:
+			vote_count_lbl.text = "0 votes"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -348,33 +407,55 @@ func _rpc_broadcast_votes(phase : int, vote_dict : Dictionary) -> void:
 
 func _update_vote_displays() -> void:
 	var cards : Array[Node3D] = _cards_for(current_phase)
-	# Build per-card voter name lists.
-	var names_per_card : Array = [[], [], []]
+	# Build per-card voter data.
+	var ids_per_card   : Array = [[], [], []]
 	for key in _current_votes:
 		var peer_id : int = int(key)
-		var idx : int = int(_current_votes[key])
-		if idx < 0 or idx > 2:
-			continue
-		var p_name : String = "Player"
-		if Lobby.players.has(peer_id):
-			p_name = str(Lobby.players[peer_id]["name"])
-		names_per_card[idx].append(p_name)
+		var idx     : int = int(_current_votes[key])
+		if idx >= 0 and idx <= 2:
+			ids_per_card[idx].append(peer_id)
 
+	const AVATAR_SIZE  : int = 36
+	const AVATAR_GAP   : int = 4
 	for i : int in 3:
 		var vp : SubViewport = cards[i].get_node("CardVP")
-		var vote_lbl : Label = vp.get_node("Votes")
-		var voters : Array = names_per_card[i]
-		var count : int = voters.size()
-		if count == 0:
-			vote_lbl.text = ""
-		else:
-			var joined : String = ""
-			for vi : int in voters.size():
-				if vi > 0:
-					joined += ", "
-				joined += str(voters[vi])
-			var suffix : String = "" if count == 1 else "s"
-			vote_lbl.text = "%d vote%s\n%s" % [count, suffix, joined]
+		var votes_root : Node2D = vp.get_node("Votes")
+		# Clear existing avatars.
+		for child : Node in votes_root.get_children():
+			child.queue_free()
+		# Update vote-count label.
+		var vote_count_lbl : Label = vp.get_node_or_null("VoteCount")
+		if vote_count_lbl:
+			var n : int = ids_per_card[i].size()
+			vote_count_lbl.text = "%d vote%s" % [n, "s" if n != 1 else ""]
+		# Rebuild avatar circles.
+		var ox : int = 0
+		for pid : int in ids_per_card[i]:
+			var hue  : float  = fmod(float(abs(pid)) * 0.618, 1.0)
+			var col  : Color  = Color.from_hsv(hue, 0.75, 0.95)
+			var p_name : String = Lobby.display_name(pid)
+
+			# Coloured square background (avatar placeholder).
+			var circle := ColorRect.new()
+			circle.size     = Vector2(AVATAR_SIZE, AVATAR_SIZE)
+			circle.position = Vector2(ox, 0)
+			circle.color    = col
+			votes_root.add_child(circle)
+
+			# Initial-letter label centred inside the square.
+			var init_lbl := Label.new()
+			init_lbl.text = p_name.substr(0, 1).to_upper()
+			init_lbl.size = Vector2(AVATAR_SIZE, AVATAR_SIZE)
+			init_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			init_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+			init_lbl.add_theme_font_size_override("font_size", 20)
+			init_lbl.add_theme_color_override("font_color", Color(0.1, 0.1, 0.1))
+			circle.add_child(init_lbl)
+
+			ox += AVATAR_SIZE + AVATAR_GAP
+			# Wrap to next row after overflow.
+			if ox >= 240:
+				ox = 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -502,3 +583,177 @@ func _on_server_closed() -> void:
 		gs.disconnect_message = "Host left the server."
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  LEADERBOARD STATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+## Build the 4th station at the +X world position (camera looks there when
+## cam_pivot.rotation.y = −π/2).  All elements are in the station’s local space;
+## rotation_degrees.y = 90 ensures the “front” faces the camera.
+func _setup_leaderboard_station() -> void:
+	_leaderboard_station = Node3D.new()
+	_leaderboard_station.name = "LeaderboardStation"
+	_leaderboard_station.position = Vector3(7.0, 0.0, 0.0)
+	_leaderboard_station.rotation_degrees.y = 90.0
+	add_child(_leaderboard_station)
+
+	# ─ Background panel ─
+	var panel_mat := StandardMaterial3D.new()
+	panel_mat.albedo_color = Color(0.06, 0.06, 0.14)
+	panel_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var panel_mesh := BoxMesh.new()
+	panel_mesh.size = Vector3(10.0, 6.5, 0.08)
+	var panel_inst := MeshInstance3D.new()
+	panel_inst.mesh = panel_mesh
+	panel_inst.material_override = panel_mat
+	panel_inst.position = Vector3(0.0, 3.2, 0.05)
+	_leaderboard_station.add_child(panel_inst)
+
+	# ─ Header label ─
+	var hdr := Label3D.new()
+	hdr.name = "BoardTitle"
+	hdr.text = "LEADERBOARD"
+	hdr.font_size = 80
+	hdr.outline_size = 8
+	hdr.modulate = Color(1.0, 0.9, 0.3)
+	hdr.position = Vector3(0.0, 5.85, 0.0)
+	hdr.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_leaderboard_station.add_child(hdr)
+
+	# ─ Podium blocks: centre/tallest = 1st, left = 2nd, right = 3rd ─
+	# Each entry: [local_x, height, colour].
+	var pods : Array = [
+		[  0.0, 1.4, Color(1.00, 0.84, 0.00)],  # gold
+		[ -2.5, 0.9, Color(0.75, 0.75, 0.75)],  # silver
+		[  2.5, 0.6, Color(0.80, 0.50, 0.20)],  # bronze
+	]
+	for pod : Array in pods:
+		var px  : float = pod[0]
+		var ph  : float = pod[1]
+		var col : Color = pod[2]
+		var pm := StandardMaterial3D.new()
+		pm.albedo_color = col * 0.55
+		pm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var bm := BoxMesh.new()
+		bm.size = Vector3(1.9, ph, 1.1)
+		var pi := MeshInstance3D.new()
+		pi.mesh = bm
+		pi.material_override = pm
+		pi.position = Vector3(px, ph * 0.5, 0.0)
+		_leaderboard_station.add_child(pi)
+
+
+## Populate the leaderboard with player capsules + score labels.
+## Reads scores from GameSettings.lps_scores — call after the scene settles.
+func _populate_leaderboard() -> void:
+	if _leaderboard_station == null:
+		return
+	var gs : Node = get_node_or_null("/root/GameSettings")
+	if gs == null:
+		return
+
+	# Remove stale contestants if re-entering the screen.
+	for child : Node in _leaderboard_station.get_children():
+		if child.name.begins_with("Contestant"):
+			child.queue_free()
+
+	# Sort players by score descending.
+	var scores : Dictionary = gs.lps_scores
+	var sorted_ids : Array = []
+	for pid : int in scores:
+		sorted_ids.append(pid)
+	sorted_ids.sort_custom(func(a : int, b : int) -> bool:
+		return scores.get(a, 0) > scores.get(b, 0))
+
+	# Matches the podium x/top-y values in _setup_leaderboard_station().
+	var pod_x     : Array[float] = [  0.0, -2.5,  2.5]
+	var pod_top_y : Array[float] = [  1.4,  0.9,  0.6]
+	var ranks     : Array[String] = ["1ST", "2ND", "3RD"]
+
+	for i : int in mini(sorted_ids.size(), 3):
+		var pid   : int   = sorted_ids[i]
+		var hue   : float = fmod(float(abs(pid)) * 0.618, 1.0)
+		var col   : Color = Color.from_hsv(hue, 0.75, 0.90)
+		var pts   : int   = scores.get(pid, 0)
+		var pname : String = Lobby.display_name(pid)
+
+		var root := Node3D.new()
+		root.name = "Contestant%d" % i
+		root.position = Vector3(pod_x[i], pod_top_y[i], 0.0)
+		_leaderboard_station.add_child(root)
+
+		# Capsule mesh (player avatar).
+		var cap_mesh := CapsuleMesh.new()
+		cap_mesh.radius = 0.32
+		cap_mesh.height = 1.4
+		var cap_mat := StandardMaterial3D.new()
+		cap_mat.albedo_color = col
+		cap_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var cap_inst := MeshInstance3D.new()
+		cap_inst.mesh = cap_mesh
+		cap_inst.material_override = cap_mat
+		cap_inst.position = Vector3(0.0, 0.7, 0.0)
+		root.add_child(cap_inst)
+
+		# Rank badge (1ST / 2ND / 3RD).
+		var rank_lbl := Label3D.new()
+		rank_lbl.text = ranks[i]
+		rank_lbl.font_size = 52
+		rank_lbl.outline_size = 6
+		rank_lbl.modulate = Color(1.0, 0.9, 0.3) if i == 0 else Color.WHITE
+		rank_lbl.position = Vector3(0.0, -0.35, 0.0)
+		rank_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		root.add_child(rank_lbl)
+
+		# Name + score label.
+		var info_lbl := Label3D.new()
+		info_lbl.text = "%s\n%d pts" % [pname, pts]
+		info_lbl.font_size = 46
+		info_lbl.outline_size = 5
+		info_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		info_lbl.position = Vector3(0.0, 1.85, 0.0)
+		info_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		root.add_child(info_lbl)
+
+
+## Tween the camera pivot to face the leaderboard station.
+## Awaitable — host awaits it; clients call fire-and-forget.
+func _show_leaderboard() -> void:
+	current_phase = Phase.LEADERBOARD
+	timer_label.text = ""
+	var tw := create_tween()
+	tw.set_ease(Tween.EASE_IN_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(cam_pivot, "position", Vector3(0.0, 2.5, 0.0), 1.2)
+	tw.parallel().tween_property(cam_pivot, "rotation",
+		Vector3(-0.12, -PI * 0.5, 0.0), 1.2)
+	await tw.finished
+
+
+## Sweep the camera from the leaderboard (−π/2) to the map station (+π/2),
+## passing the gamemode station (0) on the way.  Fires-and-forgets; the tween
+## callback starts map voting when the sweep finishes.
+func _tween_from_leaderboard_to_gamemode() -> void:
+	var tw := create_tween()
+	tw.set_ease(Tween.EASE_IN_OUT)
+	tw.set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(cam_pivot, "rotation",
+		Vector3(-0.12, 0.0, 0.0), 2.0)
+	tw.tween_callback(func() -> void:
+		current_phase = Phase.GAMEMODE
+		_begin_voting_phase())
+
+
+## Return all players to the lobby without disconnecting.
+@rpc("authority", "reliable", "call_remote")
+func _rpc_end_to_lobby() -> void:
+	_end_to_lobby()
+
+
+func _end_to_lobby() -> void:
+	if has_node("/root/GameSettings"):
+		get_node("/root/GameSettings").lps_clear()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://multiplayer/LobbyRoom.tscn")

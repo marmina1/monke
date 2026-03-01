@@ -8,10 +8,15 @@ extends Node3D
 @onready var back_btn         : Button  = $UILayer/BottomBar/BackBtn
 @onready var count_label      : Label   = $UILayer/TopBar/CountLabel
 @onready var ip_label         : Label   = $UILayer/TopBar/IPLabel
+@onready var show_ip_btn      : Button  = $UILayer/TopBar/ShowIPBtn
 @onready var rounds_spin      : SpinBox = $UILayer/BottomBar/RoundsSpinBox
 @onready var rounds_label     : Label   = $UILayer/BottomBar/RoundsLabel
 
 @onready var lobby : Node = get_node("/root/Lobby")
+
+var _public_ip  : String = ""
+var _lan_ip     : String = ""
+var _ip_visible : bool   = false
 
 ## Fixed palette so every peer gets a consistent colour.
 const COLORS : Array[Color] = [
@@ -39,8 +44,11 @@ func _ready() -> void:
 	rounds_spin.value = 3
 	rounds_spin.value_changed.connect(_on_rounds_changed)
 
-	# Show local IP so the host can share it.
-	ip_label.text = "IP: %s" % _get_local_ip()
+	# Show public IP so the host can share it for port-forwarded connections.
+	_lan_ip = _get_local_ip()
+	ip_label.text = "IP: fetching…"
+	show_ip_btn.pressed.connect(_on_toggle_ip)
+	_fetch_public_ip()
 
 	lobby.player_joined.connect(_on_player_joined)
 	lobby.player_left.connect(_on_player_left)
@@ -186,3 +194,46 @@ func _get_local_ip() -> String:
 			continue
 		return addr
 	return "127.0.0.1"
+
+
+# ── Public IP fetch  ──────────────────────────────────────────────────────────
+
+func _fetch_public_ip() -> void:
+	var http := HTTPRequest.new()
+	http.name = "IPFetcher"
+	add_child(http)
+	http.request_completed.connect(_on_ip_response.bind(http))
+	var err : int = http.request("https://api.ipify.org")
+	if err != OK:
+		ip_label.text = "IP: (unavailable)"
+		http.queue_free()
+
+
+func _on_ip_response(result: int, code: int, _headers: PackedStringArray,
+		body: PackedByteArray, http: HTTPRequest) -> void:
+	http.queue_free()
+	if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+		_public_ip = body.get_string_from_utf8().strip_edges()
+	else:
+		_public_ip = _get_local_ip()  # fallback to LAN IP
+	_refresh_ip_label()
+
+
+func _on_toggle_ip() -> void:
+	_ip_visible = not _ip_visible
+	_refresh_ip_label()
+
+
+func _refresh_ip_label() -> void:
+	if _public_ip == "":
+		ip_label.text = "IP: fetching…"
+		show_ip_btn.text = "Show"
+		return
+	if _ip_visible:
+		# LAN IP = for players on the same Wi-Fi/network (including yourself).
+		# WAN IP = for players joining over the internet (needs port forward 4433).
+		ip_label.text = "LAN: %s  |  WAN: %s    port 4433" % [_lan_ip, _public_ip]
+		show_ip_btn.text = "Hide"
+	else:
+		ip_label.text = "IP: ●●●●●●●●●●●"
+		show_ip_btn.text = "Show"

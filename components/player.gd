@@ -76,7 +76,11 @@ var _net_head_x : float   = 0.0          # target head pitch
 var hunger      : float = 100.0
 var is_dead     : bool  = false
 var is_starving : bool  = false
-var _hunger_enabled : bool = true
+var _hunger_enabled       : bool = true
+var _hunger_passive_drain : bool = true  ## set false in Tag mode — only abilities cost hunger
+
+# Per-player push cooldown (path → remaining seconds) to avoid spammy impulses.
+var _player_push_cooldowns : Dictionary = {}
 
 # Per-hand cooldown timers.
 var _left_cooldown  : float = 0.0
@@ -178,6 +182,9 @@ func _ready() -> void:
 		return
 
 	# ── Local player setup ──
+	# Don't show own name label (first-person view; would clutter screen).
+	if has_node("NameLabel3D"):
+		get_node("NameLabel3D").visible = false
 	camera.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_puppet_body.visible = false  # don't render own body from first person
@@ -230,6 +237,22 @@ func _create_puppet_body() -> void:
 	_puppet_body.material_override = mat
 	_puppet_body.position = Vector3(0.0, 0.8, 0.0)  # centre of capsule
 	add_child(_puppet_body)
+
+	# ── Name label (visible to other players; hidden for local in _ready) ──
+	var name_lbl := Label3D.new()
+	name_lbl.name = "NameLabel3D"
+	name_lbl.position = Vector3(0.0, 2.0, 0.0)
+	name_lbl.font_size = 32
+	name_lbl.outline_size = 8
+	name_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	name_lbl.no_depth_test = true
+	name_lbl.render_priority = 1
+	name_lbl.modulate = Color.WHITE
+	if has_node("/root/Lobby"):
+		name_lbl.text = Lobby.display_name(peer_id)
+	else:
+		name_lbl.text = "Player %d" % peer_id
+	add_child(name_lbl)
 
 
 func _input(event: InputEvent) -> void:
@@ -385,8 +408,7 @@ func _physics_process(delta: float) -> void:
 
 	_handle_push()
 	move_and_slide()
-
-	# Clear consumption flags at the end of the physics frame.
+	_check_player_collisions()
 	_left_consumed  = false
 	_right_consumed = false
 
@@ -451,6 +473,11 @@ func _tick_cooldowns(delta: float) -> void:
 	_right_cooldown  = maxf(_right_cooldown - delta, 0.0)
 	_left_dtap_timer = maxf(_left_dtap_timer - delta, 0.0)
 	_right_dtap_timer = maxf(_right_dtap_timer - delta, 0.0)
+	# Tick per-player bump cooldowns.
+	for key in _player_push_cooldowns.keys():
+		_player_push_cooldowns[key] -= delta
+		if _player_push_cooldowns[key] <= 0.0:
+			_player_push_cooldowns.erase(key)
 
 
 ## Vine-grab input – runs every physics frame, even while swinging one hand,
@@ -525,7 +552,9 @@ func _handle_push() -> void:
 ## rope_len   = current distance from player to anchor (natural hang length).
 ## Clamped to 0.5 m minimum so a zero-distance grab doesn't collapse the sim.
 func _grab_vine(vine: Vine, is_left: bool, anchor: Vector3, hit_point: Vector3) -> void:
-	var link_idx := vine.nearest_link(global_position)
+	# Use hit_point (the actual surface contact on the vine) to find the nearest
+	# chain link, so the arm tracks the segment that was visually touched.
+	var link_idx := vine.nearest_link(hit_point)
 
 	# ── Combo check ───────────────────────────────────────────────────────────
 	# Rewards L→R→L alternation across DIFFERENT vines.
@@ -701,6 +730,33 @@ func _push_hit_vines() -> void:
 			velocity *= maxf(1.0 - spd * 0.01, 0.7)
 
 
+## When colliding with another CharacterBody3D player, apply a mutual bump impulse.
+## Local player only — the RPC notifies the remote peer to push back on their end.
+func _check_player_collisions() -> void:
+	if not is_local or is_dead:
+		return
+	for i in get_slide_collision_count():
+		var body := get_slide_collision(i).get_collider()
+		if not (body is Player) or body == self:
+			continue
+		var other : Player = body as Player
+		var path_key : String = str(other.get_path())
+		if _player_push_cooldowns.has(path_key):
+			continue  # still on cooldown for this target
+		_player_push_cooldowns[path_key] = 0.4  # 0.4 s cooldown per target
+		# Direction: from self outward toward the other player (horizontal).
+		var dir := (other.global_position - global_position)
+		dir.y = 0.0
+		if dir.length_squared() < 0.001:
+			dir = -global_transform.basis.z  # fallback: push in facing dir
+		dir = dir.normalized()
+		const BUMP_FORCE : float = 4.5
+		# Push self backward.
+		velocity += -dir * BUMP_FORCE * 0.5
+		# Ask the other player's authoritative machine to apply the forward push.
+		other.rpc_id(other.get_multiplayer_authority(), "receive_push", dir, BUMP_FORCE)
+
+
 # ── Poo creation / throw ─────────────────────────────────────────────────────
 
 func _try_create_poo(is_left: bool) -> void:
@@ -766,7 +822,7 @@ func _throw_poo(is_left: bool) -> void:
 # ── Hunger logic ──────────────────────────────────────────────────────────────
 
 func _tick_hunger(delta: float) -> void:
-	if not _hunger_enabled or not is_local:
+	if not _hunger_enabled or not _hunger_passive_drain or not is_local:
 		return
 	# High combo = less hunger drain (reward for skilful alternating swings).
 	var drain_mult := maxf(1.0 - _combo * combo_hunger_reduction, min_hunger_drain_mult)
@@ -808,6 +864,24 @@ func set_hunger_enabled(enabled: bool) -> void:
 			hud.get_node("Control/TopLeft").visible = false
 
 
+## Disable only the passive hunger drain; ability costs (poo, push) still apply.
+func set_hunger_passive_drain(enabled: bool) -> void:
+	_hunger_passive_drain = enabled
+	if not enabled and is_starving:
+		is_starving = false
+		if hunger_death_timer and not hunger_death_timer.is_queued_for_deletion():
+			hunger_death_timer.stop()
+		starvation_tick.emit(0.0)
+
+
+## Called (locally on the receiving machine) when another player bumps into this one.
+@rpc("any_peer", "unreliable", "call_local")
+func receive_push(direction: Vector3, force: float) -> void:
+	if not is_local or is_dead:
+		return
+	velocity += direction * force
+
+
 func _on_death_timer_timeout() -> void:
 	die()
 
@@ -828,7 +902,15 @@ func die() -> void:
 	if _right_poo_visual:
 		_right_poo_visual.queue_free()
 		_right_poo_visual = null
-		right_hand_state  = HandState.FREE
+		right_hand_state = HandState.FREE
+	# Hide everything visible on this player.
+	if head:
+		head.visible = false
+	var name_lbl := get_node_or_null("NameLabel3D")
+	if name_lbl:
+		name_lbl.visible = false
+	if _puppet_body:
+		_puppet_body.visible = false
 	if is_local:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player_died.emit()
@@ -841,8 +923,14 @@ func die() -> void:
 func _rpc_die() -> void:
 	if not is_dead:
 		is_dead = true
+		if head:
+			head.visible = false
+		var name_lbl := get_node_or_null("NameLabel3D")
+		if name_lbl:
+			name_lbl.visible = false
 		if _puppet_body:
 			_puppet_body.visible = false
+		player_died.emit()
 
 
 # ── Network transform sync ───────────────────────────────────────────────────

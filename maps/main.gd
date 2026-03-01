@@ -136,13 +136,25 @@ func _on_player_died(peer_id : int) -> void:
 
 
 func _spawn_gamemode_manager() -> void:
-	if not has_node("/root/GameSettings"):
-		return
-	var gs : Node = get_node("/root/GameSettings")
-	match gs.selected_gamemode:
-		"Last Person Standing":
-			var lps_script : Script = load("res://maps/lps_manager.gd")
-			var lps := Node.new()
-			lps.name = "LPSManager"
-			lps.set_script(lps_script)
-			add_child(lps)
+	var gm : String = ""
+	if has_node("/root/GameSettings"):
+		gm = get_node("/root/GameSettings").selected_gamemode
+
+	if gm == "Banana Frenzy":
+		var bf_script : Script = load("res://maps/banana_frenzy_manager.gd")
+		var bf := Node.new()
+		bf.name = "BananaFrenzyManager"
+		bf.set_script(bf_script)
+		add_child(bf)
+	elif gm == "Tag":
+		var tag_script : Script = load("res://maps/tag_manager.gd")
+		var tag := Node.new()
+		tag.name = "TagManager"
+		tag.set_script(tag_script)
+		add_child(tag)
+	else:
+		var lps_script : Script = load("res://maps/lps_manager.gd")
+		var lps := Node.new()
+		lps.name = "LPSManager"
+		lps.set_script(lps_script)
+		add_child(lps)
