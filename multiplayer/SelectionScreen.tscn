@@ -1,0 +1,390 @@
+[gd_scene format=3 uid="uid://c03ubts3uga8r"]
+
+[ext_resource type="Script" uid="uid://dcp4eb8b8usw5" path="res://multiplayer/selection_screen.gd" id="1"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.05, 0.05, 0.12, 1)
+ambient_light_color = Color(0.3, 0.3, 0.4, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="Animation" id="RESET"]
+resource_name = "RESET"
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("CameraPivot:position")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(0, 6, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("CameraPivot:rotation")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(-0.6, 0, 0)]
+}
+
+[sub_resource type="Animation" id="intro_to_gamemode"]
+resource_name = "intro_to_gamemode"
+length = 1.5
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("CameraPivot:position")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1.5),
+"transitions": PackedFloat32Array(0.4, 1),
+"update": 0,
+"values": [Vector3(0, 6, 0), Vector3(0, 2.5, 0)]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("CameraPivot:rotation")
+tracks/1/interp = 2
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 1.5),
+"transitions": PackedFloat32Array(0.4, 1),
+"update": 0,
+"values": [Vector3(-0.6, 0, 0), Vector3(-0.12, 0, 0)]
+}
+
+[sub_resource type="Animation" id="pivot_down"]
+resource_name = "pivot_down"
+length = 1.5
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("CameraPivot:rotation")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1.5),
+"transitions": PackedFloat32Array(1, 0.3),
+"update": 0,
+"values": [Vector3(-0.12, 3.14159, 0), Vector3(-1.4, 3.14159, 0)]
+}
+
+[sub_resource type="Animation" id="pivot_to_buff"]
+resource_name = "pivot_to_buff"
+length = 1.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("CameraPivot:rotation")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1.2),
+"transitions": PackedFloat32Array(1, 0.5),
+"update": 0,
+"values": [Vector3(-0.12, 1.5708, 0), Vector3(-0.12, 3.14159, 0)]
+}
+
+[sub_resource type="Animation" id="pivot_to_map"]
+resource_name = "pivot_to_map"
+length = 1.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("CameraPivot:rotation")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 1.2),
+"transitions": PackedFloat32Array(1, 0.5),
+"update": 0,
+"values": [Vector3(-0.12, 0, 0), Vector3(-0.12, 1.5708, 0)]
+}
+
+[sub_resource type="AnimationLibrary" id="anim_lib"]
+_data = {
+&"RESET": SubResource("RESET"),
+&"intro_to_gamemode": SubResource("intro_to_gamemode"),
+&"pivot_down": SubResource("pivot_down"),
+&"pivot_to_buff": SubResource("pivot_to_buff"),
+&"pivot_to_map": SubResource("pivot_to_map")
+}
+
+[sub_resource type="BoxMesh" id="card_mesh"]
+size = Vector3(2, 2.8, 0.1)
+
+[sub_resource type="StandardMaterial3D" id="card_mat_gm"]
+albedo_color = Color(0.15, 0.55, 0.85, 1)
+
+[sub_resource type="BoxShape3D" id="card_shape"]
+size = Vector3(2, 2.8, 0.12)
+
+[sub_resource type="StandardMaterial3D" id="card_mat_map"]
+albedo_color = Color(0.2, 0.7, 0.3, 1)
+
+[sub_resource type="StandardMaterial3D" id="card_mat_buff"]
+albedo_color = Color(0.85, 0.6, 0.15, 1)
+
+[node name="SelectionScreen" type="Node3D" unique_id=502117735]
+script = ExtResource("1")
+
+[node name="CameraPivot" type="Node3D" parent="." unique_id=1745718050]
+transform = Transform3D(1, 0, 0, 0, 0.8253356, 0.5646425, 0, -0.5646425, 0.8253356, 0, 6, 0)
+
+[node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=1100573964]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5)
+fov = 65.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1966681040]
+environment = SubResource("env")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="." unique_id=1588720379]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.014530182, 2.4716792, -0.028404236)
+omni_range = 20.001871
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=1927817995]
+libraries/ = SubResource("anim_lib")
+
+[node name="Stations" type="Node3D" parent="." unique_id=994917616]
+
+[node name="GamemodeStation" type="Node3D" parent="Stations" unique_id=1699172239]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, -7)
+
+[node name="Card1" type="Node3D" parent="Stations/GamemodeStation" unique_id=1695672158]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/GamemodeStation/Card1" unique_id=307604214]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_gm")
+
+[node name="Area3D" type="Area3D" parent="Stations/GamemodeStation/Card1" unique_id=1278222411]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/GamemodeStation/Card1/Area3D" unique_id=1159778294]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/GamemodeStation/Card1" unique_id=526121915]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Tag"
+font_size = 38
+outline_size = 6
+
+[node name="Card2" type="Node3D" parent="Stations/GamemodeStation" unique_id=1663654953]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/GamemodeStation/Card2" unique_id=912443782]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_gm")
+
+[node name="Area3D" type="Area3D" parent="Stations/GamemodeStation/Card2" unique_id=532569430]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/GamemodeStation/Card2/Area3D" unique_id=1652205240]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/GamemodeStation/Card2" unique_id=1366981884]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Mode 2"
+font_size = 38
+outline_size = 6
+
+[node name="Card3" type="Node3D" parent="Stations/GamemodeStation" unique_id=990567865]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/GamemodeStation/Card3" unique_id=134525914]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_gm")
+
+[node name="Area3D" type="Area3D" parent="Stations/GamemodeStation/Card3" unique_id=1715376011]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/GamemodeStation/Card3/Area3D" unique_id=1636262357]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/GamemodeStation/Card3" unique_id=888381214]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Mode 3"
+font_size = 38
+outline_size = 6
+
+[node name="MapStation" type="Node3D" parent="Stations" unique_id=1488454316]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, -7, 0, 0)
+
+[node name="Card1" type="Node3D" parent="Stations/MapStation" unique_id=207115384]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/MapStation/Card1" unique_id=893504403]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_map")
+
+[node name="Area3D" type="Area3D" parent="Stations/MapStation/Card1" unique_id=1523335255]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/MapStation/Card1/Area3D" unique_id=389588241]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/MapStation/Card1" unique_id=1251996666]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Map 1"
+font_size = 38
+outline_size = 6
+
+[node name="Card2" type="Node3D" parent="Stations/MapStation" unique_id=179417146]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/MapStation/Card2" unique_id=652661179]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_map")
+
+[node name="Area3D" type="Area3D" parent="Stations/MapStation/Card2" unique_id=2051516883]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/MapStation/Card2/Area3D" unique_id=1641749996]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/MapStation/Card2" unique_id=670292359]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Map 2"
+font_size = 38
+outline_size = 6
+
+[node name="Card3" type="Node3D" parent="Stations/MapStation" unique_id=411257327]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/MapStation/Card3" unique_id=1865742568]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_map")
+
+[node name="Area3D" type="Area3D" parent="Stations/MapStation/Card3" unique_id=1768071652]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/MapStation/Card3/Area3D" unique_id=1965500932]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/MapStation/Card3" unique_id=2092587827]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Map 3"
+font_size = 38
+outline_size = 6
+
+[node name="BuffStation" type="Node3D" parent="Stations" unique_id=1738955216]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 7)
+
+[node name="Card1" type="Node3D" parent="Stations/BuffStation" unique_id=708494070]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/BuffStation/Card1" unique_id=344617997]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_buff")
+
+[node name="Area3D" type="Area3D" parent="Stations/BuffStation/Card1" unique_id=797995046]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/BuffStation/Card1/Area3D" unique_id=1649946367]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/BuffStation/Card1" unique_id=2057283803]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Buff 1"
+font_size = 38
+outline_size = 6
+
+[node name="Card2" type="Node3D" parent="Stations/BuffStation" unique_id=1971353938]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/BuffStation/Card2" unique_id=686182877]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_buff")
+
+[node name="Area3D" type="Area3D" parent="Stations/BuffStation/Card2" unique_id=269134091]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/BuffStation/Card2/Area3D" unique_id=1324709458]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/BuffStation/Card2" unique_id=1417241092]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Buff 2"
+font_size = 38
+outline_size = 6
+
+[node name="Card3" type="Node3D" parent="Stations/BuffStation" unique_id=1020688672]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.5, 1.5, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Stations/BuffStation/Card3" unique_id=91457983]
+mesh = SubResource("card_mesh")
+surface_material_override/0 = SubResource("card_mat_buff")
+
+[node name="Area3D" type="Area3D" parent="Stations/BuffStation/Card3" unique_id=1942507382]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Stations/BuffStation/Card3/Area3D" unique_id=1149370440]
+shape = SubResource("card_shape")
+
+[node name="Label3D" type="Label3D" parent="Stations/BuffStation/Card3" unique_id=759758129]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.08)
+text = "Buff 3"
+font_size = 38
+outline_size = 6
+
+[node name="UILayer" type="CanvasLayer" parent="." unique_id=486888642]
+layer = 5
+
+[node name="TopBar" type="HBoxContainer" parent="UILayer" unique_id=498076267]
+anchors_preset = 10
+anchor_right = 1.0
+offset_top = 12.0
+offset_bottom = 56.0
+mouse_filter = 2
+theme_override_constants/separation = 30
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="UILayer/TopBar" unique_id=678346301]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+text = "CHOOSE GAMEMODE"
+horizontal_alignment = 1
+
+[node name="TimerLabel" type="Label" parent="UILayer/TopBar" unique_id=1619715789]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 30
+text = "10"
+horizontal_alignment = 1
+
+[node name="PreviewBar" type="HBoxContainer" parent="UILayer" unique_id=1404142584]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -50.0
+mouse_filter = 2
+theme_override_constants/separation = 40
+alignment = 1
+
+[node name="GMPreview" type="Label" parent="UILayer/PreviewBar" unique_id=1374341103]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.7, 0.95, 1)
+theme_override_font_sizes/font_size = 18
+text = "Gamemode: ---"
+
+[node name="MapPreview" type="Label" parent="UILayer/PreviewBar" unique_id=1676063221]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.85, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+text = "Map: ---"
+
+[node name="BuffPreview" type="Label" parent="UILayer/PreviewBar" unique_id=19126009]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.75, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+text = "Buff: ---"
+
+[node name="Blackout" type="ColorRect" parent="UILayer" unique_id=1963037531]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0, 0, 0, 1)

@@ -1,0 +1,441 @@
+[gd_scene load_steps=18 format=3]
+
+[ext_resource type="Script" path="res://maps/main.gd" id="1"]
+[ext_resource type="PackedScene" path="res://components/Player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://components/Banana.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://components/Vine.tscn" id="4"]
+[ext_resource type="Script" path="res://maps/banana_spawner.gd" id="7"]
+
+; ── Red Canyon: scorched desert, dusty orange, harsh sun ─────────────────────
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 1
+background_color = Color(0.82, 0.6, 0.35, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.95, 0.8, 0.55, 1)
+ambient_light_energy = 0.6
+fog_enabled = true
+fog_light_color = Color(0.85, 0.6, 0.3, 1)
+fog_density = 0.005
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_1"]
+size = Vector2(180, 180)
+
+[sub_resource type="StandardMaterial3D" id="Material_Ground"]
+albedo_color = Color(0.72, 0.42, 0.18, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape_Ground"]
+size = Vector3(180, 0.2, 180)
+
+; ── Rock pillar / mesa platforms ─────────────────────────────────────────────
+[sub_resource type="BoxMesh" id="BoxMesh_Platform"]
+size = Vector3(5, 1.5, 5)
+
+[sub_resource type="StandardMaterial3D" id="Material_Platform"]
+albedo_color = Color(0.6, 0.32, 0.15, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape_Platform"]
+size = Vector3(5, 1.5, 5)
+
+; ── Tall rock pillars (act as "trees" – pushable obstacles) ──────────────────
+[sub_resource type="CylinderMesh" id="PillarMesh"]
+top_radius = 1.2
+bottom_radius = 1.8
+height = 20.0
+radial_segments = 7
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="PillarMat"]
+albedo_color = Color(0.55, 0.3, 0.12, 1)
+
+[sub_resource type="CylinderShape3D" id="PillarShape"]
+radius = 1.5
+height = 20.0
+
+; ── Cactus mesh (small obstacles) ────────────────────────────────────────────
+[sub_resource type="CylinderMesh" id="CactusMesh"]
+top_radius = 0.25
+bottom_radius = 0.35
+height = 4.0
+radial_segments = 6
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="CactusMat"]
+albedo_color = Color(0.2, 0.45, 0.15, 1)
+
+[sub_resource type="CylinderShape3D" id="CactusShape"]
+radius = 0.3
+height = 4.0
+
+; ─────────────────────────────────────────────────────────────────────────────
+[node name="RedCanyon" type="Node3D"]
+script = ExtResource("1")
+player_scene = ExtResource("2")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0, -0.5, 0.354, 0.707, 0.612, 0.354, -0.707, 0.612, 0, 25, 0)
+light_color = Color(1, 0.88, 0.65, 1)
+light_energy = 1.8
+shadow_enabled = true
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("PlaneMesh_1")
+surface_material_override/0 = SubResource("Material_Ground")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+shape = SubResource("BoxShape_Ground")
+
+[node name="SpawnPoint" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 12, -12)
+
+; ── Mesa / ledge platforms ──────────────────────────────────────────────────
+[node name="Platforms" type="Node3D" parent="."]
+
+[node name="MesaA" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 10, -12)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaA"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaA"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="MesaB" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 12, -8)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaB"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaB"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="MesaC" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 14, 8)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaC"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaC"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="MesaD" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 9, 15)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaD"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaD"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="MesaE" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 11, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaE"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaE"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="MesaF" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 8, 20)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaF"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaF"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="MesaG" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 15, 3)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaG"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaG"]
+shape = SubResource("BoxShape_Platform")
+
+[node name="MesaH" type="StaticBody3D" parent="Platforms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 11, -18)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Platforms/MesaH"]
+mesh = SubResource("BoxMesh_Platform")
+surface_material_override/0 = SubResource("Material_Platform")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Platforms/MesaH"]
+shape = SubResource("BoxShape_Platform")
+
+; ── Rock Pillars (push-off obstacles, ropes hang from their tops) ────────────
+[node name="Pillars" type="Node3D" parent="."]
+
+[node name="Pillar_01" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0, -15)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_01"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_01"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+[node name="Pillar_02" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0, -12)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_02"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_02"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+[node name="Pillar_03" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, 8)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_03"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_03"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+[node name="Pillar_04" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 25, 0, 12)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_04"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_04"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+[node name="Pillar_05" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -22)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_05"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_05"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+[node name="Pillar_06" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, 20)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_06"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_06"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+[node name="Pillar_07" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, -4)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_07"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_07"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+[node name="Pillar_08" type="StaticBody3D" parent="Pillars"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -5)
+
+[node name="Mesh" type="MeshInstance3D" parent="Pillars/Pillar_08"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+mesh = SubResource("PillarMesh")
+surface_material_override/0 = SubResource("PillarMat")
+
+[node name="Col" type="CollisionShape3D" parent="Pillars/Pillar_08"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 10, 0)
+shape = SubResource("PillarShape")
+
+; ── Cacti (small obstacles) ─────────────────────────────────────────────────
+[node name="Cacti" type="Node3D" parent="."]
+
+[node name="Cactus_01" type="StaticBody3D" parent="Cacti"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, -8)
+
+[node name="Mesh" type="MeshInstance3D" parent="Cacti/Cactus_01"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("CactusMesh")
+surface_material_override/0 = SubResource("CactusMat")
+
+[node name="Col" type="CollisionShape3D" parent="Cacti/Cactus_01"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+shape = SubResource("CactusShape")
+
+[node name="Cactus_02" type="StaticBody3D" parent="Cacti"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 6)
+
+[node name="Mesh" type="MeshInstance3D" parent="Cacti/Cactus_02"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("CactusMesh")
+surface_material_override/0 = SubResource("CactusMat")
+
+[node name="Col" type="CollisionShape3D" parent="Cacti/Cactus_02"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+shape = SubResource("CactusShape")
+
+[node name="Cactus_03" type="StaticBody3D" parent="Cacti"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15, 0, 14)
+
+[node name="Mesh" type="MeshInstance3D" parent="Cacti/Cactus_03"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("CactusMesh")
+surface_material_override/0 = SubResource("CactusMat")
+
+[node name="Col" type="CollisionShape3D" parent="Cacti/Cactus_03"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+shape = SubResource("CactusShape")
+
+[node name="Cactus_04" type="StaticBody3D" parent="Cacti"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 0, -18)
+
+[node name="Mesh" type="MeshInstance3D" parent="Cacti/Cactus_04"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("CactusMesh")
+surface_material_override/0 = SubResource("CactusMat")
+
+[node name="Col" type="CollisionShape3D" parent="Cacti/Cactus_04"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+shape = SubResource("CactusShape")
+
+[node name="Cactus_05" type="StaticBody3D" parent="Cacti"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 0, -20)
+
+[node name="Mesh" type="MeshInstance3D" parent="Cacti/Cactus_05"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("CactusMesh")
+surface_material_override/0 = SubResource("CactusMat")
+
+[node name="Col" type="CollisionShape3D" parent="Cacti/Cactus_05"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+shape = SubResource("CactusShape")
+
+[node name="Cactus_06" type="StaticBody3D" parent="Cacti"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0, 22)
+
+[node name="Mesh" type="MeshInstance3D" parent="Cacti/Cactus_06"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("CactusMesh")
+surface_material_override/0 = SubResource("CactusMat")
+
+[node name="Col" type="CollisionShape3D" parent="Cacti/Cactus_06"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+shape = SubResource("CactusShape")
+
+; ── Hanging ropes (same Vine physics – old mining cables from pillar tops) ───
+[node name="Ropes" type="Node3D" parent="."]
+
+[node name="Rope_01" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 18, -13)
+
+[node name="Rope_02" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 19, -10)
+
+[node name="Rope_03" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 17, -8)
+
+[node name="Rope_04" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 18.5, -14)
+
+[node name="Rope_05" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 19, -8)
+
+[node name="Rope_06" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 17, -6)
+
+[node name="Rope_07" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -23, 18, 4)
+
+[node name="Rope_08" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -27, 19.5, 10)
+
+[node name="Rope_09" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 17, 12)
+
+[node name="Rope_10" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 23, 18, 8)
+
+[node name="Rope_11" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 27, 19, 14)
+
+[node name="Rope_12" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 20, 17.5, 5)
+
+[node name="Rope_13" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 18, -20)
+
+[node name="Rope_14" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 19, -24)
+
+[node name="Rope_15" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 17.5, -16)
+
+[node name="Rope_16" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 18, 18)
+
+[node name="Rope_17" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 19, 22)
+
+[node name="Rope_18" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 17, 15)
+
+[node name="Rope_19" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 18.5, -2)
+
+[node name="Rope_20" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32, 19, 0)
+
+[node name="Rope_21" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 18, -8)
+
+[node name="Rope_22" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -32, 19.5, -2)
+
+[node name="Rope_23" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 18, 0)
+
+[node name="Rope_24" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 17.5, -3)
+
+[node name="Rope_25" parent="Ropes" instance=ExtResource("4")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 19, 10)
+
+; ── Banana Spawner ──────────────────────────────────────────────────────────
+[node name="BananaSpawner" type="Node3D" parent="."]
+script = ExtResource("7")
+banana_scene = ExtResource("3")
+max_bananas = 18
+area_half_x = 25.0
+area_half_z = 25.0
+min_height = 12.0
+max_height = 18.0
+min_spacing = 4.0
+respawn_delay = 6.0

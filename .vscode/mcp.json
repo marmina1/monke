@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "godot": {
+      "command": "node",
+      "args": ["c:\\Users\\ahmed\\monke\\godot-mcp\\build\\index.js"],
+      "env": {
+        "DEBUG": "true"
+      }
+    }
+  }
+}

@@ -1,0 +1,148 @@
+extends Node3D
+
+## Assign res://components/Player.tscn in the Inspector.
+@export var player_scene : PackedScene
+
+@onready var spawn_point : Marker3D = $SpawnPoint
+
+## Multiplayer: container that holds all player nodes.
+var _players_node : Node3D = null
+
+## Track spawned peer IDs to avoid double-spawn.
+var _spawned_peers : Dictionary = {}
+
+## Chat overlay instance (multiplayer only).
+var _chat : Node = null
+
+
+func _ready() -> void:
+	_apply_settings()
+
+	# Create a dedicated container for players.
+	_players_node = Node3D.new()
+	_players_node.name = "Players"
+	add_child(_players_node)
+
+	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+		# Multiplayer mode — spawn one player per connected peer.
+		_setup_multiplayer()
+	else:
+		# Singleplayer fallback.
+		_spawn_local_player()
+
+
+func _apply_settings() -> void:
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		if not gs.ground_enemies_enabled:
+			for child in get_children():
+				if child.name == "Swamp":
+					for swamp_child in child.get_children():
+						if swamp_child.name.begins_with("Crocodile"):
+							swamp_child.queue_free()
+
+
+# ── Singleplayer ──────────────────────────────────────────────────────────────
+
+func _spawn_local_player() -> void:
+	if player_scene == null:
+		push_error("Main: 'player_scene' export is not assigned.")
+		return
+	var player : Player = player_scene.instantiate() as Player
+	_players_node.add_child(player)
+	player.global_position = spawn_point.global_position
+	player.player_died.connect(_on_player_died.bind(0))
+	_apply_hunger(player)
+
+
+# ── Multiplayer ───────────────────────────────────────────────────────────────
+
+func _setup_multiplayer() -> void:
+	# Spawn chat overlay.
+	var chat_scene := load("res://ui/Chat.tscn")
+	if chat_scene:
+		_chat = chat_scene.instantiate()
+		add_child(_chat)
+
+	# Spawn for every peer already in the lobby.
+	for peer_id : int in Lobby.players.keys():
+		_spawn_mp_player(peer_id)
+	# Late-joiners (shouldn't happen mid-game, but safe).
+	Lobby.player_joined.connect(func(_id : int, _n : String) -> void: _spawn_mp_player(_id))
+	Lobby.player_left.connect(_on_peer_left)
+
+	# Host-disconnect for clients.
+	Lobby.server_closed.connect(_on_server_closed)
+
+	# Spawn gamemode manager if applicable.
+	_spawn_gamemode_manager()
+
+
+func _spawn_mp_player(peer_id : int) -> void:
+	if _spawned_peers.has(peer_id):
+		return
+	if player_scene == null:
+		push_error("Main: 'player_scene' export is not assigned.")
+		return
+
+	var player : Player = player_scene.instantiate() as Player
+	player.name = "Player_%d" % peer_id
+
+	# Decide local vs puppet BEFORE adding to tree – _ready() reads is_local.
+	var is_mine : bool = (peer_id == multiplayer.get_unique_id())
+	player.setup_network(is_mine)
+
+	# Assign multiplayer authority BEFORE adding to tree so _ready knows.
+	player.set_multiplayer_authority(peer_id)
+	_players_node.add_child(player)
+	_spawned_peers[peer_id] = true
+
+	# Offset spawn positions so players don't overlap.
+	var idx : int = _spawned_peers.size() - 1
+	var offset := Vector3(idx * 3.0, 0.0, 0.0)
+	player.global_position = spawn_point.global_position + offset
+
+	# Wire death signal.
+	player.player_died.connect(_on_player_died.bind(peer_id))
+
+	if is_mine:
+		_apply_hunger(player)
+
+
+func _apply_hunger(player : Player) -> void:
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		if not gs.hunger_enabled and player.has_method("set_hunger_enabled"):
+			player.set_hunger_enabled(false)
+
+
+func _on_peer_left(peer_id : int) -> void:
+	var node : Node = _players_node.get_node_or_null("Player_%d" % peer_id)
+	if node:
+		node.queue_free()
+	_spawned_peers.erase(peer_id)
+
+
+func _on_server_closed() -> void:
+	# Chat handles the "host left" message and scene switch.
+	# If there's no chat (shouldn't happen), do it here as fallback.
+	if not _chat:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+
+
+func _on_player_died(peer_id : int) -> void:
+	print("Player %d died!" % peer_id)
+
+
+func _spawn_gamemode_manager() -> void:
+	if not has_node("/root/GameSettings"):
+		return
+	var gs : Node = get_node("/root/GameSettings")
+	match gs.selected_gamemode:
+		"Last Person Standing":
+			var lps_script : Script = load("res://maps/lps_manager.gd")
+			var lps := Node.new()
+			lps.name = "LPSManager"
+			lps.set_script(lps_script)
+			add_child(lps)

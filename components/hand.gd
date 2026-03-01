@@ -6,8 +6,13 @@ extends Node3D
 @export var grab_length    : float = 1.6   ## max reach when extending to a vine
 @export var tip_damping    : float = 0.06  ## 0 = infinitely floppy, 1 = rigid
 ## Absolute maximum arm extension during a grab (metres).
-## The arm grows to match the actual distance to the click point, up to this.
 @export var max_grab_reach : float = 5.0
+## Spring stiffness for the rubber-band retraction (higher = snappier).
+@export var grab_spring_k       : float = 28.0
+## Spring damping — one-hand grab (underdamped = slight bounce).
+@export var grab_spring_damp    : float = 6.0
+## Spring damping — two-hand grab (more damped = gentler settle).
+@export var grab_spring_damp_2h : float = 11.0
 
 # ── State ─────────────────────────────────────────────────────────────────────
 var _tip_world      : Vector3 = Vector3.ZERO
@@ -18,6 +23,11 @@ var _grab_reach     : float   = 1.6
 var _initialized    : bool    = false
 ## World position the free arm tracks; zero = floppy pendulum physics.
 var _guided_target  : Vector3 = Vector3.ZERO
+## Visually displayed arm length – springs toward _grab_reach on grab.
+var _display_len    : float   = 0.7
+var _display_vel    : float   = 0.0
+## Active damping coefficient (set per grab, one-hand vs two-hand).
+var _active_damp    : float   = 6.0
 
 # ── Node refs ─────────────────────────────────────────────────────────────────
 @onready var pivot    : Node3D         = $Pivot
@@ -34,14 +44,28 @@ func _ready() -> void:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 ## Called by player when this hand grabs a vine.
-func grab(grab_world_pos: Vector3) -> void:
-	_is_grabbing = true
-	_grab_world  = grab_world_pos
-	_tip_vel     = Vector3.ZERO
-	# Measure the actual distance from this hand's shoulder to the click point
-	# and use that as the arm's displayed length.  Clamped to max_grab_reach so
-	# the arm stays plausible even when the vine is far away.
-	_grab_reach  = clampf((grab_world_pos - global_position).length(), 0.3, max_grab_reach)
+## Pass two_handed=true when both hands are grabbing so the spring settles softer.
+func grab(grab_world_pos: Vector3, two_handed: bool = false) -> void:
+	var already := _is_grabbing
+	_is_grabbing  = true
+	_grab_world   = grab_world_pos
+	_tip_vel      = Vector3.ZERO
+	_grab_reach   = clampf((grab_world_pos - global_position).length(), 0.3, max_grab_reach)
+	# Only reset the spring on a fresh grab, not when called every frame.
+	if not already:
+		_display_len  = max_grab_reach
+		_display_vel  = 0.0
+	_active_damp  = grab_spring_damp_2h if two_handed else grab_spring_damp
+
+
+## Update the target world position while already grabbing (tracks moving vines).
+func update_grab_pos(new_pos: Vector3) -> void:
+	_grab_world = new_pos
+
+
+## Switch damping after grab (e.g. partner grabs second vine mid-swing).
+func set_two_handed(on: bool) -> void:
+	_active_damp = grab_spring_damp_2h if on else grab_spring_damp
 
 
 ## Called by player when this hand releases a vine.
@@ -74,13 +98,21 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_grab() -> void:
-	# Recompute the reach every frame so the arm tracks the actual distance
-	# as the player swings toward or away from the vine — no locked-in length.
 	var to_grab := _grab_world - global_position
 	if to_grab.length_squared() < 0.001:
 		return
 	_grab_reach = clampf(to_grab.length(), 0.25, max_grab_reach)
-	_point_arm_at(_grab_world, _grab_reach)
+
+	# Spring the displayed length toward the actual reach (rubber-band retraction).
+	# F = -k*(x - target) - damp*v  →  second-order spring with damping.
+	var delta := get_physics_process_delta_time()
+	var force := -grab_spring_k * (_display_len - _grab_reach) \
+				 - _active_damp * _display_vel
+	_display_vel += force * delta
+	_display_len += _display_vel * delta
+	_display_len  = maxf(_display_len, 0.1)   # never collapse to zero
+
+	_point_arm_at(_grab_world, _display_len)
 
 
 func _update_floppy(delta: float) -> void:

@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3 uid="uid://behqij2bghpnx"]
 
-[ext_resource type="Script" uid="uid://ly860w4bx3br" path="res://scripts/swamp.gd" id="1"]
-[ext_resource type="PackedScene" path="res://scenes/Crocodile.tscn" id="2"]
+[ext_resource type="Script" uid="uid://ly860w4bx3br" path="res://enemy/swamp.gd" id="1"]
+[ext_resource type="PackedScene" path="res://enemy/Crocodile.tscn" id="2"]
 
 [sub_resource type="PlaneMesh" id="WaterMesh"]
 size = Vector2(28, 28)

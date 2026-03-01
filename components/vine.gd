@@ -77,6 +77,8 @@ func _build_links() -> void:
 		var link               := VineLink.new()
 		link.root_vine          = self
 		link.sync_to_physics    = false
+		# Layer 2 / mask 0 keeps them invisible to CharacterBody3D.move_and_slide
+		# while the player's VineRay (mask 3 = layers 1+2) still detects them.
 		link.collision_layer    = 2
 		link.collision_mask     = 0
 		var col                := CollisionShape3D.new()
@@ -262,3 +264,13 @@ func nearest_link(world_pos: Vector3) -> int:
 			best_d = d
 			best_i = i
 	return best_i
+
+
+## Push chain nodes near world_pos with an impulse.  Verlet integration
+## applies the impulse as a position delta (velocity = pos − prev), so
+## subtracting from _prev_pos is the correct way to inject energy.
+func push_chain(world_pos: Vector3, impulse: Vector3) -> void:
+	var idx := nearest_link(world_pos)
+	# Affect the hit node and its immediate neighbours for a broader wobble.
+	for i in range(maxi(1, idx - 1), mini(LINK_COUNT, idx + 2)):
+		_prev_pos[i] -= impulse

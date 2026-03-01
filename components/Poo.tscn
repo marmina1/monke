@@ -1,6 +1,6 @@
 [gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://scripts/poo.gd" id="1"]
+[ext_resource type="Script" path="res://components/poo.gd" id="1"]
 
 ; ── Visual ────────────────────────────────────────────────────────────────────
 [sub_resource type="SphereMesh" id="PooMesh"]

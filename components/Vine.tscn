@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://scripts/vine.gd" id="1"]
+[ext_resource type="Script" path="res://components/vine.gd" id="1"]
 
 ; Placeholder mesh – hidden at runtime, replaced by procedural chain segments.
 [sub_resource type="CylinderMesh" id="CylinderMesh_1"]

@@ -13,6 +13,9 @@ var _thrower : Player = null
 func _ready() -> void:
 	# Stays frozen in the thrower's hand until throw() is called.
 	freeze = true
+	# Short delay before HitZone starts monitoring so the poo clears the
+	# player's hand without instantly colliding with the ground.
+	$HitZone.monitoring = false
 	$HitZone.body_entered.connect(_on_body_entered)
 
 
@@ -23,10 +26,13 @@ func setup(owner_player: Player) -> void:
 	add_collision_exception_with(owner_player)
 
 
-## Unfreeze and launch the poo.  Called by the player on the second Space press.
+## Unfreeze and launch the poo.  Called by the player on throw.
 func throw(direction: Vector3, force: float) -> void:
 	freeze = false
 	linear_velocity = direction * force
+	# Enable hit detection after a short delay so the poo doesn't
+	# immediately hit the ground at the spawn point.
+	get_tree().create_timer(0.15).timeout.connect(func(): $HitZone.monitoring = true)
 	get_tree().create_timer(lifetime).timeout.connect(queue_free)
 
 

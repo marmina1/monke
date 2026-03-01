@@ -1,11 +1,12 @@
-[gd_scene load_steps=14 format=3 uid="uid://baiq7kp88w2lf"]
+[gd_scene load_steps=15 format=3 uid="uid://baiq7kp88w2lf"]
 
-[ext_resource type="Script" uid="uid://sblw7khl4man" path="res://scripts/main.gd" id="1"]
-[ext_resource type="PackedScene" uid="uid://d0hf6nwjqlk76" path="res://scenes/Player.tscn" id="2"]
-[ext_resource type="PackedScene" path="res://scenes/Banana.tscn" id="3"]
-[ext_resource type="PackedScene" path="res://scenes/Vine.tscn" id="4"]
-[ext_resource type="PackedScene" path="res://scenes/Tree.tscn" id="5"]
-[ext_resource type="PackedScene" uid="uid://behqij2bghpnx" path="res://scenes/Swamp.tscn" id="6"]
+[ext_resource type="Script" uid="uid://sblw7khl4man" path="res://maps/main.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://d0hf6nwjqlk76" path="res://components/Player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://components/Banana.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://components/Vine.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://components/Tree.tscn" id="5"]
+[ext_resource type="PackedScene" uid="uid://behqij2bghpnx" path="res://enemy/Swamp.tscn" id="6"]
+[ext_resource type="Script" path="res://maps/banana_spawner.gd" id="7"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -35,7 +36,6 @@ size = Vector3(4, 1, 4)
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
 player_scene = ExtResource("2")
-banana_scene = ExtResource("3")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_1")
@@ -384,3 +384,17 @@ transform = Transform3D(3.0577989, 0, 0, 0, 1, 0, 0, 0, 2.5183425, 0, 0.05000001
 transform = Transform3D(3.0577989, 0, 0, 0, 1, 0, 0, 0, 2.5183425, 0, 1, 0)
 
 [editable path="Swamp"]
+
+; ── Banana Spawner ──────────────────────────────────────────────────────────
+; Centred on the vine field.  All spawn parameters controllable in Inspector.
+[node name="BananaSpawner" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+script = ExtResource("7")
+banana_scene = ExtResource("3")
+max_bananas = 20
+area_half_x = 15.0
+area_half_z = 15.0
+min_height = 9.0
+max_height = 14.5
+min_spacing = 3.0
+respawn_delay = 5.0

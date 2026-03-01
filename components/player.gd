@@ -3,7 +3,6 @@ extends CharacterBody3D
 
 # ── Movement constants ────────────────────────────────────────────────────────
 const GRAVITY           := 9.8
-const MOUSE_SENSITIVITY := 0.003
 
 # ── Hunger settings (tweak in the Inspector) ──────────────────────────────────
 @export var max_hunger             : float = 100.0
@@ -23,12 +22,12 @@ const MOUSE_SENSITIVITY := 0.003
 @export var air_damping    : float = 0.9998
 ## Minimum speed injected when grabbing a vine from a standstill.
 ## Gives the pendulum an initial kick so it swings immediately.
-@export var swing_launch_speed : float = 5.0
+@export var swing_launch_speed : float = 2.5
 
 # ── Release feel (tweak in the Inspector) ──────────────────────────────────────
-## Horizontal speed multiplier applied on every last-hand release with no combo.
-## Combo adds +15 % per step: ×2 combo = ×1.5, ×3 = ×1.65, etc.
-@export var release_boost_mult : float = 1.2
+## Speed multiplier applied on release in the full 3-D look direction.
+## 1.0 = pure physics, no free bonus. Combo adds on top.
+@export var release_boost_mult : float = 1.0
 ## Camera FOV at rest.
 @export var fov_base       : float = 70.0
 ## Camera FOV at full swing speed (fov_speed_full m/s).
@@ -43,9 +42,19 @@ const MOUSE_SENSITIVITY := 0.003
 @export var combo_hunger_reduction : float = 0.15
 ## Minimum hunger drain multiplier at high combo (0.10 = 90 % reduction cap).
 @export var min_hunger_drain_mult  : float = 0.10
-## Extra release-boost fraction per combo step (0.15 = +15 % per step).
-## No combo=×1.2 | ×2=×1.5 | ×3=×1.65 | ×5=×1.95 …
-@export var combo_speed_bonus      : float = 0.15
+## Extra release-boost fraction per combo step (0.06 = +6 % per step).
+## No combo=×1.0 | ×2=×1.12 | ×5=×1.30 …
+@export var combo_speed_bonus      : float = 0.06
+
+# ── Swing feel (tweak in the Inspector) ──────────────────────────────────────
+## Per-physics-frame velocity multiplier while grabbing a vine.
+## At 60 fps: 0.992^60 ≈ 0.62/s — vines bleed off runaway speed naturally.
+@export var swing_damping     : float = 0.992
+## Hard speed ceiling while swinging (m/s). Prevents endless combo stacking.
+@export var max_swing_speed   : float = 9.0
+## Tangential force (m/s²) nudging velocity toward the look direction while
+## grabbing. Small value = "bending" feel; physics still dominates.
+@export var swing_steer_force : float = 3.0
 
 # ── Poo system (tweak in the Inspector) ──────────────────────────────────────────
 ## Poo projectile scene – assigned via the Inspector (or Player.tscn).
@@ -55,10 +64,19 @@ const MOUSE_SENSITIVITY := 0.003
 ## Launch speed of a thrown poo (m/s).
 @export var poo_throw_force : float = 22.0
 
+# ── Multiplayer state ─────────────────────────────────────────────────────────
+## True = this is the local player (gets camera/input). False = network puppet.
+var is_local    : bool  = true
+var _puppet_body : MeshInstance3D = null  # visible capsule for remote players
+var _net_pos    : Vector3 = Vector3.ZERO  # target pos from authority
+var _net_rot_y  : float   = 0.0          # target Y rotation
+var _net_head_x : float   = 0.0          # target head pitch
+
 # ── Runtime state ─────────────────────────────────────────────────────────────
 var hunger      : float = 100.0
 var is_dead     : bool  = false
 var is_starving : bool  = false
+var _hunger_enabled : bool = true
 
 # Per-hand cooldown timers.
 var _left_cooldown  : float = 0.0
@@ -94,17 +112,22 @@ var _last_grab_hand   : int   = -1
 var _last_vine        : Vine  = null
 ## Time (s) held on the vine since the most-recent grab.
 var _combo_hold_timer : float = 0.0
+## Chain-node index grabbed per hand (for live arm tracking).
+var _left_grab_idx    : int   = -1
+var _right_grab_idx   : int   = -1
 
-# ── Poo state ──────────────────────────────────────────────────────────────────────────────
-## Lightweight visual (MeshInstance3D) parented to the holding hand.
-## Freed on throw; a fresh physics Poo.tscn is spawned at that moment.
-var _held_poo_visual  : Node3D = null
-## Which hand is holding the poo.  true = left, false = right.
-var _poo_hand_is_left : bool = true
-## Seconds remaining in the double-tap window per hand (0 = window closed).
+# ── Poo state (per-hand) ──────────────────────────────────────────────────────
+## Each hand independently tracks its own held poo visual.
+var _left_poo_visual  : Node3D = null
+var _right_poo_visual : Node3D = null
+## Double-tap timers per hand.
 var _left_dtap_timer  : float = 0.0
 var _right_dtap_timer : float = 0.0
-const DTAP_WINDOW     : float = 0.35  ## seconds between taps to count as double
+const DTAP_WINDOW     : float = 0.22  ## seconds – quick but intentional
+## Input consumption flags:  set in _input when poo fires, checked by
+## _check_vine_grab / _handle_push to suppress accidental grabs/pushes.
+var _left_consumed    : bool  = false
+var _right_consumed   : bool  = false
 ## Emitted every frame with the new hunger value (used by HUD).
 signal hunger_changed(value: float, max_value: float)
 ## Emitted every frame while the starvation timer is running (0 = cancelled).
@@ -129,16 +152,46 @@ signal speed_changed(speed: float)
 
 
 func _ready() -> void:
-	# Activate this camera (important when the player is instanced at runtime).
+	# Safety: in multiplayer ensure is_local matches authority even if
+	# setup_network() was somehow missed.
+	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+		is_local = is_multiplayer_authority()
+
+	# Build the visible puppet body (capsule mesh) for ALL players.
+	# Local player's mesh will be hidden; remote player's mesh is visible.
+	_create_puppet_body()
+
+	if not is_local:
+		# This is a remote puppet — remove input, camera, HUD, raycasts entirely.
+		camera.current = false
+		# CanvasLayer ignores 'visible' — must remove HUD/PauseMenu from tree.
+		hud.queue_free()
+		hud = null
+		if has_node("PauseMenu"):
+			get_node("PauseMenu").queue_free()
+		left_hand_ray.enabled = false
+		right_hand_ray.enabled = false
+		vine_ray.enabled = false
+		hunger_death_timer.queue_free()
+		_hunger_enabled = false
+		_puppet_body.visible = true
+		return
+
+	# ── Local player setup ──
 	camera.make_current()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_puppet_body.visible = false  # don't render own body from first person
+
+	# Apply FOV from GameSettings.
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		fov_base = gs.fov
+		camera.fov = gs.fov
 
 	# Exclude the player's own body from all raycasts.
-	# Head is a plain Node3D so Godot does NOT auto-exclude the CharacterBody3D;
-	# without this the hand rays hit the player's own capsule from inside.
 	left_hand_ray.add_exception(self)
 	right_hand_ray.add_exception(self)
-	vine_ray.add_exception(self)   # ShapeCast3D also supports add_exception
+	vine_ray.add_exception(self)
 
 	# Configure the starvation timer.
 	hunger_death_timer.wait_time = starvation_death_delay
@@ -156,48 +209,80 @@ func _ready() -> void:
 	hunger_changed.emit(hunger, max_hunger)
 
 
+## Called by main.gd right after instantiation, BEFORE _ready.
+func setup_network(local : bool) -> void:
+	is_local = local
+
+
+## Builds a capsule mesh child so other players can see this player.
+func _create_puppet_body() -> void:
+	_puppet_body = MeshInstance3D.new()
+	_puppet_body.name = "PuppetBody"
+	var cap := CapsuleMesh.new()
+	cap.radius = 0.35
+	cap.height = 1.6
+	var mat := StandardMaterial3D.new()
+	# Give each peer a deterministic colour based on their authority ID.
+	var peer_id : int = get_multiplayer_authority()
+	var hue : float = fmod(float(abs(peer_id)) * 0.618, 1.0)
+	mat.albedo_color = Color.from_hsv(hue, 0.7, 0.9)
+	_puppet_body.mesh = cap
+	_puppet_body.material_override = mat
+	_puppet_body.position = Vector3(0.0, 0.8, 0.0)  # centre of capsule
+	add_child(_puppet_body)
+
+
 func _input(event: InputEvent) -> void:
-	if is_dead:
+	if not is_local or is_dead:
 		return
 
 	# ── Mouse look ────────────────────────────────────────────────────────────
-	if event is InputEventMouseMotion:
-		rotate_y(-event.relative.x * MOUSE_SENSITIVITY)
-		head.rotate_x(-event.relative.y * MOUSE_SENSITIVITY)
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var sens : float = 0.003
+		if has_node("/root/GameSettings"):
+			var gs : Node = get_node("/root/GameSettings")
+			sens = gs.mouse_sensitivity * 0.006
+		rotate_y(-event.relative.x * sens)
+		head.rotate_x(-event.relative.y * sens)
 		head.rotation.x = clamp(head.rotation.x, -PI / 2.0, PI / 2.0)
 
-	# ── Escape toggles cursor capture ─────────────────────────────────────────
-	if event.is_action_pressed("ui_cancel"):
-		Input.mouse_mode = (
-			Input.MOUSE_MODE_VISIBLE
-			if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			else Input.MOUSE_MODE_CAPTURED
-		)
-
-	# ── Poo: quick double-tap LMB/RMB anywhere ──────────────────────────────────
-	# First tap: opens a 0.35 s window (push/grab fires normally via _physics_process).
-	# Second tap inside window + hand FREE: spawn poo in that hand.
-	# Any tap while HOLDING_POO: throw it.
+	# ── Poo: quick double-tap LMB / RMB ──────────────────────────────────────────
+	# First tap opens a 0.22 s window.  Second tap inside the window either:
+	#   • spawns a poo in that hand (if FREE)
+	#   • (holding poo handled below regardless of window)
+	# Any tap while that hand is HOLDING_POO = throw immediately.
+	# Setting _*_consumed = true blocks vine grab / push for this input event.
 	if event.is_action_pressed("push_left"):
 		if left_hand_state == HandState.HOLDING_POO:
-			_throw_poo()
+			_throw_poo(true)
+			_left_consumed = true
 		elif _left_dtap_timer > 0.0 and left_hand_state == HandState.FREE:
 			_try_create_poo(true)
+			_left_consumed  = true
 			_left_dtap_timer = 0.0
 		else:
 			_left_dtap_timer = DTAP_WINDOW
 
 	if event.is_action_pressed("push_right"):
 		if right_hand_state == HandState.HOLDING_POO:
-			_throw_poo()
+			_throw_poo(false)
+			_right_consumed = true
 		elif _right_dtap_timer > 0.0 and right_hand_state == HandState.FREE:
 			_try_create_poo(false)
+			_right_consumed  = true
 			_right_dtap_timer = 0.0
 		else:
 			_right_dtap_timer = DTAP_WINDOW
 
 
 func _physics_process(delta: float) -> void:
+	# ── Puppet interpolation ─────────────────────────────────────────────────
+	if not is_local:
+		global_position = global_position.lerp(_net_pos, delta * 15.0)
+		rotation.y = lerp_angle(rotation.y, _net_rot_y, delta * 15.0)
+		head.rotation.x = lerp_angle(head.rotation.x, _net_head_x, delta * 15.0)
+		return
+
 	if is_dead:
 		return
 
@@ -231,6 +316,23 @@ func _physics_process(delta: float) -> void:
 		if _right_vine:
 			_right_vine.update_grab_target(global_position)
 
+		# ── Swing steering ────────────────────────────────────────────────────
+		# Nudge velocity toward the 3-D look direction, but only along the
+		# tangent of the rope (radial component stripped out) so we never
+		# fight the constraint solver.  Gives a physics-respecting "lean".
+		var _steer_look := -head.global_transform.basis.z
+		var _radial     := Vector3.ZERO
+		var _rpivot_n   := 0
+		if left_hand_state  == HandState.GRABBING:
+			_radial  += (_left_pivot  - global_position).normalized(); _rpivot_n += 1
+		if right_hand_state == HandState.GRABBING:
+			_radial  += (_right_pivot - global_position).normalized(); _rpivot_n += 1
+		if _rpivot_n > 0:
+			var _rad_dir := (_radial / _rpivot_n).normalized()
+			var _tan     := _steer_look - _rad_dir * _steer_look.dot(_rad_dir)
+			if _tan.length_squared() > 0.001:
+				velocity += _tan.normalized() * swing_steer_force * delta
+
 		# ── Stage 1 · Pre-move velocity projection ────────────────────────────
 		# Remove the outward-radial velocity component BEFORE move_and_slide.
 		# This is the kinematic equivalent of rope-tension force: gravity's
@@ -249,14 +351,25 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 
 		# ── Stage 2 · Post-move drift correction ──────────────────────────────
-		# Removes the tiny arc-vs-chord error that accumulates because
-		# move_and_slide steps along a straight chord, not the curved arc.
-		# Also catches any extra stretch introduced by surface collisions.
 		for _iter in 3:
 			if left_hand_state == HandState.GRABBING:
 				_correct_rope_length(_left_pivot, _left_rope_len)
 			if right_hand_state == HandState.GRABBING:
 				_correct_rope_length(_right_pivot, _right_rope_len)
+
+		# ── Swing damping + speed cap ──────────────────────────────────────────
+		# Bleed off energy so vines can't stack speed infinitely.
+		velocity *= pow(swing_damping, delta * 60.0)
+		var _swing_spd := velocity.length()
+		if _swing_spd > max_swing_speed:
+			velocity = velocity * (max_swing_speed / _swing_spd)
+
+		# ── Live arm tracking ─────────────────────────────────────────────────
+		# Point each hand's arm at the actual moving chain node it grabbed.
+		if _left_vine and _left_grab_idx >= 0:
+			left_hand.update_grab_pos(_left_vine.link_pos(_left_grab_idx))
+		if _right_vine and _right_grab_idx >= 0:
+			right_hand.update_grab_pos(_right_vine.link_pos(_right_grab_idx))
 		return
 
 	# ── 6. Free-flight / grounded branch ─────────────────────────────────────
@@ -273,13 +386,24 @@ func _physics_process(delta: float) -> void:
 	_handle_push()
 	move_and_slide()
 
+	# Clear consumption flags at the end of the physics frame.
+	_left_consumed  = false
+	_right_consumed = false
+
 
 func _process(delta: float) -> void:
+	if not is_local:
+		return
 	if is_dead:
 		return
+
+	# Send our position to all other peers every frame.
+	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+		rpc("_rpc_sync_transform", global_position, rotation.y, head.rotation.x)
+
 	_tick_hunger(delta)
 	# Stream live countdown to HUD every frame while the timer is running.
-	if is_starving and not hunger_death_timer.is_stopped():
+	if is_starving and hunger_death_timer and not hunger_death_timer.is_stopped():
 		starvation_tick.emit(hunger_death_timer.time_left)
 	# Tint crosshair yellow when a VineLink is within reach of the shape cast.
 	var targeting := false
@@ -288,9 +412,14 @@ func _process(delta: float) -> void:
 			if vine_ray.get_collider(i) is VineLink:
 				targeting = true
 				break
-	hud.set_vine_targeted(targeting)
+	if hud:
+		hud.set_vine_targeted(targeting)
 
 	# ── Dynamic FOV ─────────────────────────────────────────────────────
+	# Pick up live FOV changes from the pause-menu slider.
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		fov_base = gs.fov
 	# Base: quadratic ramp from fov_base at rest to fov_max at fov_speed_full.
 	# Pulse: flat spike added on a timed release, decays at 40°/s so it lasts
 	#        ~0.45 s — just long enough to register as a camera flick.
@@ -301,10 +430,11 @@ func _process(delta: float) -> void:
 	camera.fov      = lerpf(camera.fov, target_fov, delta * 4.0)
 	speed_changed.emit(spd)
 
-	# Arm tracks the held visual (it's a child of the hand, moves automatically).
-	if _held_poo_visual != null:
-		var poo_hand := left_hand if _poo_hand_is_left else right_hand
-		poo_hand.grab(_held_poo_visual.global_position)
+	# Track each held poo visual independently.
+	if _left_poo_visual != null:
+		left_hand.grab(_left_poo_visual.global_position)
+	if _right_poo_visual != null:
+		right_hand.grab(_right_poo_visual.global_position)
 
 	# Guide free hands to follow the look direction instead of flopping.
 	var _look_fwd := -head.global_transform.basis.z
@@ -346,9 +476,11 @@ func _check_vine_grab() -> void:
 	# Physics pivot = fixed top anchor (verlet node 0, never moves).
 	# Visual hit    = exact surface point the shape struck on the chain.
 	var anchor : Vector3 = vine.grab_point.global_position
-	if Input.is_action_just_pressed("push_left") and left_hand_state == HandState.FREE:
+	if Input.is_action_just_pressed("push_left") and left_hand_state == HandState.FREE \
+			and not _left_consumed:
 		_grab_vine(vine, true, anchor, hit_point)
-	if Input.is_action_just_pressed("push_right") and right_hand_state == HandState.FREE:
+	if Input.is_action_just_pressed("push_right") and right_hand_state == HandState.FREE \
+			and not _right_consumed:
 		_grab_vine(vine, false, anchor, hit_point)
 
 
@@ -360,14 +492,14 @@ func _handle_push() -> void:
 		return
 	var push_dirs : Array[Vector3] = []
 
-	if Input.is_action_just_pressed("push_left"):
+	if Input.is_action_just_pressed("push_left") and not _left_consumed:
 		if left_hand_state == HandState.FREE and _left_cooldown <= 0.0 \
 				and left_hand_ray.is_colliding() \
 				and not left_hand_ray.get_collider() is Vine:
 			push_dirs.append(_push_dir_from(left_hand_ray))
 			_left_cooldown = push_cooldown
 
-	if Input.is_action_just_pressed("push_right"):
+	if Input.is_action_just_pressed("push_right") and not _right_consumed:
 		if right_hand_state == HandState.FREE and _right_cooldown <= 0.0 \
 				and right_hand_ray.is_colliding() \
 				and not right_hand_ray.get_collider() is Vine:
@@ -430,22 +562,33 @@ func _grab_vine(vine: Vine, is_left: bool, anchor: Vector3, hit_point: Vector3) 
 			fwd = fwd.normalized()
 			velocity += fwd * (swing_launch_speed - horiz_speed)
 
+	var _chain_pos := vine.link_pos(link_idx)   # actual visual node world position
+	# Use the ray hit point for the hand visual so the arm reaches to exactly
+	# where the vine was touched, not the nearest chain node centre.
 	if is_left:
-		left_hand_state = HandState.GRABBING
-		left_grab_point = vine.grab_point
-		_left_pivot     = anchor
-		_left_rope_len  = maxf((global_position - anchor).length(), 0.5)
-		_left_vine      = vine
+		var other_already := right_hand_state == HandState.GRABBING
+		left_hand_state  = HandState.GRABBING
+		left_grab_point  = vine.grab_point
+		_left_pivot      = anchor
+		_left_rope_len   = maxf((global_position - anchor).length(), 0.5)
+		_left_vine       = vine
+		_left_grab_idx   = link_idx
 		vine.set_grab(link_idx, global_position)
-		left_hand.grab(hit_point)   # arm points to where the ray hit the vine
+		left_hand.grab(hit_point, other_already)   # ray hit surface, not chain centre
+		if other_already:
+			right_hand.set_two_handed(true)
 	else:
+		var other_already := left_hand_state == HandState.GRABBING
 		right_hand_state = HandState.GRABBING
 		right_grab_point = vine.grab_point
 		_right_pivot     = anchor
 		_right_rope_len  = maxf((global_position - anchor).length(), 0.5)
 		_right_vine      = vine
+		_right_grab_idx  = link_idx
 		vine.set_grab(link_idx, global_position)
-		right_hand.grab(hit_point)  # arm points to where the ray hit the vine
+		right_hand.grab(hit_point, other_already)  # ray hit surface, not chain centre
+		if other_already:
+			left_hand.set_two_handed(true)
 
 
 ## Detach a hand from its vine.
@@ -457,18 +600,14 @@ func _release_hand(is_left: bool) -> void:
 	var other_grabbing := (right_hand_state == HandState.GRABBING) if is_left \
 						else (left_hand_state  == HandState.GRABBING)
 	if not other_grabbing:
-		var h2d := Vector2(velocity.x, velocity.z)
-		var hs  := h2d.length()
-		if hs > 0.1:   # only boost if actually moving
-			var dir2d       := h2d / hs
-			# Combo scales the multiplier: +10 % per step on top of the base 1.5×.
+		var spd := velocity.length()
+		if spd > 0.1:
+			# Boost in the full 3-D look direction so up/down/left/right all work.
+			var look_dir    := -head.global_transform.basis.z
 			var total_boost := release_boost_mult + _combo * combo_speed_bonus
-			var boosted     := hs * total_boost
-			velocity.x       = dir2d.x * boosted
-			velocity.z       = dir2d.y * boosted
-			# Combo also inflates the FOV punch — high combos feel frantic.
-			_fov_pulse       = clampf(boosted * 1.8 + _combo * 1.5, 12.0, 40.0)
-		# Break the combo if the vine was clung to too long.
+			var boosted_spd := minf(spd * total_boost, max_swing_speed * 1.3)
+			velocity        = look_dir * boosted_spd
+			_fov_pulse      = clampf(boosted_spd * 1.5 + _combo * 1.5, 8.0, 36.0)
 		if _combo_hold_timer > combo_hold_limit:
 			_combo = 0
 			combo_changed.emit(_combo)
@@ -476,6 +615,7 @@ func _release_hand(is_left: bool) -> void:
 	if is_left:
 		left_hand_state = HandState.FREE
 		left_grab_point = null
+		_left_grab_idx  = -1
 		if _left_vine:
 			_left_vine.clear_grab()
 			_left_vine = null
@@ -483,6 +623,7 @@ func _release_hand(is_left: bool) -> void:
 	else:
 		right_hand_state = HandState.FREE
 		right_grab_point = null
+		_right_grab_idx  = -1
 		if _right_vine:
 			_right_vine.clear_grab()
 			_right_vine = null
@@ -539,19 +680,42 @@ func _push_dir_from(ray: RayCast3D) -> Vector3:
 	return ray.global_transform.basis.z.normalized()
 
 
+## After every move_and_slide, check collision results for VineLinks.
+## Push the vine's chain so it swings away realistically, and slow the player.
+func _push_hit_vines() -> void:
+	for i in get_slide_collision_count():
+		var col   := get_slide_collision(i)
+		var body  := col.get_collider()
+		if body is VineLink:
+			var vine : Vine = body.root_vine
+			# Don't push the vine you're currently holding.
+			if vine == _left_vine or vine == _right_vine:
+				continue
+			var hit_pos  := col.get_position()
+			var _hit_norm := col.get_normal()              # points away from the vine toward us
+			var spd      := velocity.length()
+			# Push vine in the player's travel direction, scaled by speed.
+			var push     := velocity.normalized() * minf(spd * 0.08, 0.5)
+			vine.push_chain(hit_pos, push)
+			# Slow down the player proportionally.
+			velocity *= maxf(1.0 - spd * 0.01, 0.7)
+
+
 # ── Poo creation / throw ─────────────────────────────────────────────────────
 
-func _try_create_poo(use_left: bool) -> void:
+func _try_create_poo(is_left: bool) -> void:
 	if hunger < poo_hunger_cost:
 		return
+	# Already holding a poo in this hand – can't stack.
+	if is_left and _left_poo_visual != null:
+		return
+	if not is_left and _right_poo_visual != null:
+		return
 
-	_poo_hand_is_left = use_left
 	hunger = clampf(hunger - poo_hunger_cost, 0.0, max_hunger)
 	hunger_changed.emit(hunger, max_hunger)
 
-	# Build a lightweight visual sphere parented to the hand so it sticks perfectly.
-	# No physics body here – a fresh Poo.tscn is spawned only when thrown.
-	var poo_hand := left_hand if use_left else right_hand
+	var poo_hand := left_hand if is_left else right_hand
 	var visual   := MeshInstance3D.new()
 	var sphere   := SphereMesh.new()
 	sphere.radius = 0.13
@@ -561,30 +725,36 @@ func _try_create_poo(use_left: bool) -> void:
 	visual.mesh = sphere
 	visual.set_surface_override_material(0, mat)
 	poo_hand.add_child(visual)
-	visual.position = Vector3(0.0, 0.0, -0.7)  # arm tip in hand-local space
-	_held_poo_visual = visual
+	visual.position = Vector3(0.0, 0.0, -0.7)
 
-	# Extend arm to the visual immediately.
-	poo_hand.grab(_held_poo_visual.global_position)
-
-	if use_left:
-		left_hand_state = HandState.HOLDING_POO
+	if is_left:
+		_left_poo_visual = visual
+		left_hand_state  = HandState.HOLDING_POO
 	else:
-		right_hand_state = HandState.HOLDING_POO
+		_right_poo_visual = visual
+		right_hand_state  = HandState.HOLDING_POO
+
+	poo_hand.grab(visual.global_position)
 
 
-func _throw_poo() -> void:
-	if _held_poo_visual == null:
+func _throw_poo(is_left: bool) -> void:
+	var visual := _left_poo_visual if is_left else _right_poo_visual
+	if visual == null:
 		return
 
-	var throw_pos := _held_poo_visual.global_position
+	var throw_pos := visual.global_position
 	var throw_dir := -head.global_transform.basis.z
 
-	# Remove the visual.
-	_held_poo_visual.queue_free()
-	_held_poo_visual = null
+	visual.queue_free()
+	if is_left:
+		_left_poo_visual = null
+		left_hand_state  = HandState.FREE
+		left_hand.release()
+	else:
+		_right_poo_visual = null
+		right_hand_state  = HandState.FREE
+		right_hand.release()
 
-	# Spawn a fresh physics poo at the visual's world position and throw it.
 	if poo_scene:
 		var poo : Poo = poo_scene.instantiate() as Poo
 		get_parent().add_child(poo)
@@ -592,17 +762,12 @@ func _throw_poo() -> void:
 		poo.setup(self)
 		poo.throw(throw_dir, poo_throw_force)
 
-	if _poo_hand_is_left:
-		left_hand_state = HandState.FREE
-		left_hand.release()
-	else:
-		right_hand_state = HandState.FREE
-		right_hand.release()
-
 
 # ── Hunger logic ──────────────────────────────────────────────────────────────
 
 func _tick_hunger(delta: float) -> void:
+	if not _hunger_enabled or not is_local:
+		return
 	# High combo = less hunger drain (reward for skilful alternating swings).
 	var drain_mult := maxf(1.0 - _combo * combo_hunger_reduction, min_hunger_drain_mult)
 	hunger = clamp(hunger - hunger_drain_rate * drain_mult * delta, 0.0, max_hunger)
@@ -611,19 +776,36 @@ func _tick_hunger(delta: float) -> void:
 	if hunger <= 0.0:
 		if not is_starving:
 			is_starving = true
-			hunger_death_timer.start()
+			if hunger_death_timer and not hunger_death_timer.is_queued_for_deletion():
+				hunger_death_timer.start()
 	else:
 		if is_starving:
 			# Hunger recovered – cancel the death countdown.
 			is_starving = false
-			hunger_death_timer.stop()
-			starvation_tick.emit(0.0)   # Signal 0 tells the HUD to hide the label.
+			if hunger_death_timer and not hunger_death_timer.is_queued_for_deletion():
+				hunger_death_timer.stop()
+			starvation_tick.emit(0.0)
 
 
 ## Public API – call this from banana pickups (implemented later).
 func add_hunger(amount: float) -> void:
 	hunger = clamp(hunger + amount, 0.0, max_hunger)
 	hunger_changed.emit(hunger, max_hunger)
+
+
+## Disable the hunger system entirely (playground option).
+func set_hunger_enabled(enabled: bool) -> void:
+	_hunger_enabled = enabled
+	if not enabled:
+		hunger = max_hunger
+		hunger_changed.emit(hunger, max_hunger)
+		if is_starving:
+			is_starving = false
+			if hunger_death_timer and not hunger_death_timer.is_queued_for_deletion():
+				hunger_death_timer.stop()
+			starvation_tick.emit(0.0)
+		if hud and hud.has_node("Control/TopLeft"):
+			hud.get_node("Control/TopLeft").visible = false
 
 
 func _on_death_timer_timeout() -> void:
@@ -637,13 +819,36 @@ func die() -> void:
 	_combo          = 0
 	_last_vine      = null
 	_last_grab_hand = -1
-	combo_changed.emit(_combo)
-	if _held_poo_visual:
-		_held_poo_visual.queue_free()
-		_held_poo_visual = null
-		if _poo_hand_is_left:
-			left_hand_state = HandState.FREE
-		else:
-			right_hand_state = HandState.FREE
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if is_local:
+		combo_changed.emit(_combo)
+	if _left_poo_visual:
+		_left_poo_visual.queue_free()
+		_left_poo_visual = null
+		left_hand_state  = HandState.FREE
+	if _right_poo_visual:
+		_right_poo_visual.queue_free()
+		_right_poo_visual = null
+		right_hand_state  = HandState.FREE
+	if is_local:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	player_died.emit()
+	# Broadcast death to all peers.
+	if is_local and multiplayer.has_multiplayer_peer():
+		rpc("_rpc_die")
+
+
+@rpc("any_peer", "reliable", "call_remote")
+func _rpc_die() -> void:
+	if not is_dead:
+		is_dead = true
+		if _puppet_body:
+			_puppet_body.visible = false
+
+
+# ── Network transform sync ───────────────────────────────────────────────────
+
+@rpc("any_peer", "unreliable_ordered", "call_remote")
+func _rpc_sync_transform(pos : Vector3, rot_y : float, head_x : float) -> void:
+	_net_pos    = pos
+	_net_rot_y  = rot_y
+	_net_head_x = head_x

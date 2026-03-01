@@ -1,0 +1,341 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://ui/playground_menu.gd" id="1"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_normal"]
+bg_color = Color(0.12, 0.28, 0.1, 0.92)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.65, 0.25, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_hover"]
+bg_color = Color(0.18, 0.45, 0.15, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.85, 0.35, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_pressed"]
+bg_color = Color(0.08, 0.18, 0.06, 0.95)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.25, 0.5, 0.2, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 16.0
+content_margin_top = 6.0
+content_margin_right = 16.0
+content_margin_bottom = 6.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card_normal"]
+bg_color = Color(0.1, 0.2, 0.08, 0.85)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.25, 0.5, 0.2, 0.7)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card_selected"]
+bg_color = Color(0.15, 0.35, 0.12, 0.95)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.5, 0.9, 0.4, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel_bg"]
+bg_color = Color(0.06, 0.12, 0.05, 0.8)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[node name="PlaygroundMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.08, 0.03, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 60
+theme_override_constants/margin_top = 40
+theme_override_constants/margin_right = 60
+theme_override_constants/margin_bottom = 40
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="HeaderRow" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 40)
+theme_override_colors/font_color = Color(0.7, 0.8, 0.65, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_hover")
+text = "< BACK"
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.9, 0.78, 0.25, 1)
+theme_override_font_sizes/font_size = 42
+text = "PLAYGROUND"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBoxContainer/HeaderRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 0)
+
+[node name="SelectLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.75, 0.5, 0.9)
+theme_override_font_sizes/font_size = 20
+text = "Select a map:"
+horizontal_alignment = 1
+
+[node name="MapGrid" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="SwampForestCard" type="PanelContainer" parent="MarginContainer/VBoxContainer/MapGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(220, 180)
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_card_selected")
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MapGrid/SwampForestCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/SwampForestCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+text = "🐊"
+horizontal_alignment = 1
+
+[node name="MapName" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/SwampForestCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 20
+text = "Swamp Forest"
+horizontal_alignment = 1
+
+[node name="MapDesc" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/SwampForestCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.65, 0.5, 0.8)
+theme_override_font_sizes/font_size = 13
+text = "Crocodiles lurk in murky waters.
+Dense vines & tall trees."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="RainforestCard" type="PanelContainer" parent="MarginContainer/VBoxContainer/MapGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(220, 180)
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_card_normal")
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MapGrid/RainforestCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/RainforestCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+text = "🐆"
+horizontal_alignment = 1
+
+[node name="MapName" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/RainforestCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 20
+text = "Rainforest"
+horizontal_alignment = 1
+
+[node name="MapDesc" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/RainforestCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.65, 0.5, 0.8)
+theme_override_font_sizes/font_size = 13
+text = "Dense canopy, heavy fog.
+Towering trees & thick vines."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="CanyonCard" type="PanelContainer" parent="MarginContainer/VBoxContainer/MapGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(220, 180)
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_card_normal")
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MapGrid/CanyonCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/CanyonCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+text = "🦅"
+horizontal_alignment = 1
+
+[node name="MapName" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/CanyonCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 20
+text = "Red Canyon"
+horizontal_alignment = 1
+
+[node name="MapDesc" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/CanyonCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.65, 0.5, 0.8)
+theme_override_font_sizes/font_size = 13
+text = "Swing on old mining ropes.
+Rock pillars & cacti."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="MoonForestCard" type="PanelContainer" parent="MarginContainer/VBoxContainer/MapGrid"]
+layout_mode = 2
+custom_minimum_size = Vector2(220, 180)
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_card_normal")
+
+[node name="VBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/MapGrid/MoonForestCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Icon" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/MoonForestCard/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 38
+text = "🌙"
+horizontal_alignment = 1
+
+[node name="MapName" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/MoonForestCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 20
+text = "Moon Forest"
+horizontal_alignment = 1
+
+[node name="MapDesc" type="Label" parent="MarginContainer/VBoxContainer/MapGrid/MoonForestCard/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.65, 0.5, 0.8)
+theme_override_font_sizes/font_size = 13
+text = "Swing on twigs under moonlight.
+Dense woods & silver fog."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="OptionsPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+custom_minimum_size = Vector2(500, 0)
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel_bg")
+
+[node name="OptionsVBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/OptionsPanel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="OptionsTitle" type="Label" parent="MarginContainer/VBoxContainer/OptionsPanel/OptionsVBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.75, 0.55, 1)
+theme_override_font_sizes/font_size = 18
+text = "Map Options"
+horizontal_alignment = 1
+
+[node name="HungerToggle" type="CheckBox" parent="MarginContainer/VBoxContainer/OptionsPanel/OptionsVBox"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.75, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 16
+button_pressed = true
+text = "  Hunger Bar"
+
+[node name="EnemiesToggle" type="CheckBox" parent="MarginContainer/VBoxContainer/OptionsPanel/OptionsVBox"]
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_colors/font_color = Color(0.75, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 16
+button_pressed = true
+text = "  Ground Enemies"
+
+[node name="StartButton" type="Button" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 4
+custom_minimum_size = Vector2(260, 52)
+theme_override_colors/font_color = Color(0.95, 0.95, 0.85, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 0.9, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_normal")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_btn_pressed")
+theme_override_styles/focus = SubResource("StyleBoxFlat_btn_hover")
+text = "START"

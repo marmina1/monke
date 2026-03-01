@@ -1,0 +1,188 @@
+extends Node3D
+
+## 3D lobby room – players appear as capsules standing side by side.
+## Hover over a capsule to see their name.  Host can click "Start Game".
+
+@onready var player_container : Node3D  = $PlayerContainer
+@onready var start_btn        : Button  = $UILayer/BottomBar/StartBtn
+@onready var back_btn         : Button  = $UILayer/BottomBar/BackBtn
+@onready var count_label      : Label   = $UILayer/TopBar/CountLabel
+@onready var ip_label         : Label   = $UILayer/TopBar/IPLabel
+@onready var rounds_spin      : SpinBox = $UILayer/BottomBar/RoundsSpinBox
+@onready var rounds_label     : Label   = $UILayer/BottomBar/RoundsLabel
+
+@onready var lobby : Node = get_node("/root/Lobby")
+
+## Fixed palette so every peer gets a consistent colour.
+const COLORS : Array[Color] = [
+	Color(0.9, 0.3, 0.2),
+	Color(0.2, 0.6, 0.9),
+	Color(0.3, 0.85, 0.3),
+	Color(0.95, 0.8, 0.2),
+	Color(0.7, 0.3, 0.9),
+	Color(0.95, 0.5, 0.2),
+	Color(0.3, 0.9, 0.8),
+	Color(0.9, 0.4, 0.7),
+]
+
+
+func _ready() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	start_btn.visible = lobby.is_host()
+	start_btn.pressed.connect(_on_start)
+	back_btn.pressed.connect(_on_back)
+
+	# Rounds selector – host only.
+	rounds_spin.visible = lobby.is_host()
+	rounds_label.visible = lobby.is_host()
+	rounds_spin.value = 3
+	rounds_spin.value_changed.connect(_on_rounds_changed)
+
+	# Show local IP so the host can share it.
+	ip_label.text = "IP: %s" % _get_local_ip()
+
+	lobby.player_joined.connect(_on_player_joined)
+	lobby.player_left.connect(_on_player_left)
+	lobby.game_starting.connect(_on_game_starting)
+	lobby.server_closed.connect(_on_server_closed)
+
+	# Add chat overlay.
+	var chat_scene := load("res://ui/Chat.tscn")
+	if chat_scene:
+		add_child(chat_scene.instantiate())
+
+	# Create capsules for every player already in the lobby.
+	for id : int in lobby.players.keys():
+		var p_name : String = lobby.players[id]["name"]
+		_spawn_capsule(id, p_name)
+	_update_count()
+
+
+# ── Capsule management ────────────────────────────────────────────────────────
+
+func _spawn_capsule(id: int, p_name: String) -> void:
+	var root := Node3D.new()
+	root.name = "P_%d" % id
+
+	# ── Mesh ──
+	var mesh_inst := MeshInstance3D.new()
+	var cap_mesh := CapsuleMesh.new()
+	cap_mesh.radius = 0.3
+	cap_mesh.height = 1.2
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = COLORS[abs(id) % COLORS.size()]
+	mesh_inst.mesh = cap_mesh
+	mesh_inst.material_override = mat
+	root.add_child(mesh_inst)
+
+	# ── Area3D for hover ──
+	var area := Area3D.new()
+	area.input_ray_pickable = true
+	var shape := CollisionShape3D.new()
+	var cap_shape := CapsuleShape3D.new()
+	cap_shape.radius = 0.35
+	cap_shape.height = 1.3
+	shape.shape = cap_shape
+	area.add_child(shape)
+	area.mouse_entered.connect(_show_name.bind(root))
+	area.mouse_exited.connect(_hide_name.bind(root))
+	root.add_child(area)
+
+	# ── Name label (hidden until hover) ──
+	var label := Label3D.new()
+	label.name = "NameLabel"
+	label.text = p_name
+	label.position = Vector3(0, 1.0, 0)
+	label.font_size = 36
+	label.outline_size = 6
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.visible = false
+	root.add_child(label)
+
+	# ── Position: space players along X ──
+	var slot : int = player_container.get_child_count()
+	root.position = Vector3(slot * 1.6 - 3.2, 0.6, 0)
+
+	player_container.add_child(root)
+
+
+func _remove_capsule(id: int) -> void:
+	var node : Node = player_container.get_node_or_null("P_%d" % id)
+	if node:
+		node.queue_free()
+	# Reposition remaining capsules after a short delay so the freed node is gone.
+	await get_tree().create_timer(0.1).timeout
+	_reposition_capsules()
+
+
+func _reposition_capsules() -> void:
+	var i : int = 0
+	for child : Node in player_container.get_children():
+		child.position.x = i * 1.6 - 3.2
+		i += 1
+
+
+func _show_name(capsule: Node3D) -> void:
+	var label : Label3D = capsule.get_node("NameLabel")
+	label.visible = true
+
+
+func _hide_name(capsule: Node3D) -> void:
+	var label : Label3D = capsule.get_node("NameLabel")
+	label.visible = false
+
+
+func _update_count() -> void:
+	count_label.text = "Players: %d / %d" % [lobby.players.size(), lobby.MAX_PLAYERS]
+
+
+# ── Signals ───────────────────────────────────────────────────────────────────
+
+func _on_player_joined(id: int, p_name: String) -> void:
+	# Guard against duplicates (our own capsule was created in _ready).
+	if player_container.has_node("P_%d" % id):
+		return
+	_spawn_capsule(id, p_name)
+	_update_count()
+
+
+func _on_player_left(id: int) -> void:
+	_remove_capsule(id)
+	_update_count()
+
+
+func _on_game_starting() -> void:
+	get_tree().change_scene_to_file("res://multiplayer/SelectionScreen.tscn")
+
+
+func _on_server_closed() -> void:
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		gs.disconnect_message = "Host left the server."
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+
+
+func _on_start() -> void:
+	lobby.start_game()
+
+
+func _on_back() -> void:
+	lobby.disconnect_lobby()
+	get_tree().change_scene_to_file("res://ui/MainMenu.tscn")
+
+
+func _on_rounds_changed(value: float) -> void:
+	if has_node("/root/GameSettings"):
+		var gs : Node = get_node("/root/GameSettings")
+		gs.round_count = int(value)
+
+
+func _get_local_ip() -> String:
+	for addr : String in IP.get_local_addresses():
+		# Skip loopback and IPv6; pick the first LAN address.
+		if addr.begins_with("127.") or addr.begins_with("::") or ":" in addr:
+			continue
+		return addr
+	return "127.0.0.1"

@@ -1,6 +1,6 @@
 extends CanvasLayer
 
-# Node paths match the hierarchy defined in Player.tscn.
+# Node paths match the hierarchy defined in Player.tscn / HUD.tscn.
 @onready var hunger_label     : Label       = $Control/TopLeft/VBox/HungerLabel
 @onready var hunger_bar       : ProgressBar = $Control/TopLeft/VBox/HungerBar
 @onready var starvation_label : Label       = $Control/TopLeft/VBox/StarvationLabel
@@ -9,11 +9,24 @@ extends CanvasLayer
 @onready var combo_label      : Label       = $Control/ComboLabel
 @onready var speed_lines                    = $Control/SpeedLines
 
+# ── Game-state HUD (top-right) ───────────────────────────────────────────────
+@onready var round_label      : Label       = $Control/TopRight/RoundLabel
+@onready var alive_label      : Label       = $Control/TopRight/AliveLabel
+@onready var timer_label      : Label       = $Control/TopRight/TimerLabel
+
+# ── Spectator bar (bottom-centre) ────────────────────────────────────────────
+@onready var spectate_bar     : HBoxContainer = $Control/SpectateBar
+@onready var spectate_label   : Label         = $Control/SpectateBar/SpectateLabel
+
 
 func _ready() -> void:
 	starvation_label.visible = false
 	death_label.visible      = false
 	combo_label.visible      = false
+	round_label.text         = ""
+	alive_label.text         = ""
+	timer_label.text         = ""
+	spectate_bar.visible     = false
 
 
 ## Called every frame by the player's `hunger_changed` signal.
@@ -33,7 +46,6 @@ func update_hunger(value: float, max_value: float) -> void:
 
 
 ## Called every frame by the player's `starvation_tick` signal.
-## time_left == 0.0 means the starvation was cancelled – hide the label.
 func update_starvation_timer(time_left: float) -> void:
 	if time_left > 0.0:
 		starvation_label.visible = true
@@ -47,13 +59,11 @@ func show_death_screen() -> void:
 	death_label.visible = true
 
 
-## Called every frame from player._process().
 ## White = nothing in range. Yellow = vine is grabbable.
 func set_vine_targeted(targeting: bool) -> void:
 	crosshair.modulate = Color(1.0, 0.9, 0.1) if targeting else Color(1, 1, 1, 0.7)
 
 
-## Called by the player's combo_changed signal.
 ## Shows a coloured counter when the chain is 2+; hides it otherwise.
 func update_combo(count: int) -> void:
 	if count < 2:
@@ -61,14 +71,12 @@ func update_combo(count: int) -> void:
 		return
 	combo_label.visible = true
 	combo_label.text    = "×%d" % count
-	# Colour ramp: green → yellow → orange → red.
 	var col: Color
 	if   count >= 8: col = Color(1.0, 0.15, 0.15)
 	elif count >= 5: col = Color(1.0, 0.50, 0.10)
 	elif count >= 3: col = Color(1.0, 0.85, 0.00)
 	else:            col = Color(0.45, 1.0,  0.30)
 	combo_label.add_theme_color_override("font_color", col)
-	# Overbright flash that settles to normal – cheap punch-in animation.
 	combo_label.modulate = Color(2.5, 2.5, 2.5, 1.0)
 	var tw := create_tween()
 	tw.tween_property(combo_label, "modulate", Color.WHITE, 0.25)
@@ -77,3 +85,37 @@ func update_combo(count: int) -> void:
 ## Called by the player's speed_changed signal every process frame.
 func set_speed(speed: float) -> void:
 	speed_lines.set_speed(speed)
+
+
+# ── Game-state updates (called by LPS manager) ──────────────────────────────
+
+func update_round_info(current: int, total: int) -> void:
+	round_label.text = "Round %d / %d" % [current, total]
+
+
+func update_alive_count(alive: int) -> void:
+	alive_label.text = "Alive: %d" % alive
+
+
+func update_game_timer(time_left: float) -> void:
+	if time_left > 0.0:
+		timer_label.text = "%d:%02d" % [int(time_left) / 60, int(time_left) % 60]
+	else:
+		timer_label.text = ""
+
+
+func show_deathmatch_warning() -> void:
+	timer_label.text = "SUDDEN DEATH"
+	timer_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
+
+
+# ── Spectator mode ──────────────────────────────────────────────────────────
+
+func show_spectating(player_name: String) -> void:
+	spectate_bar.visible = true
+	spectate_label.text = "Spectating: %s  |  LMB/RMB to switch" % player_name
+	death_label.visible = false  # hide "YOU DIED" during spectating
+
+
+func hide_spectating() -> void:
+	spectate_bar.visible = false
