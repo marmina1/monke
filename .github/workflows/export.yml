@@ -1,0 +1,108 @@
+name: Export & Release
+
+on:
+  push:
+    tags:
+      - "v*"          # trigger on version tags like v1.0, v1.2.3
+  workflow_dispatch:  # allow manual runs from the Actions tab
+
+env:
+  GODOT_VERSION: "4.6.1"
+  EXPORT_PRESET: "Windows Desktop"
+  OUTPUT_NAME: "monke"
+
+jobs:
+  export-windows:
+    name: Export Windows
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      # ── 2. Install Godot headless ────────────────────────────────────────────
+      - name: Download Godot ${{ env.GODOT_VERSION }}
+        run: |
+          GODOT_URL="https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64.zip"
+          wget -q "$GODOT_URL" -O godot.zip
+          unzip -q godot.zip
+          mv "Godot_v${{ env.GODOT_VERSION }}-stable_linux.x86_64" /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+
+      # ── 3. Install export templates ──────────────────────────────────────────
+      - name: Install Godot export templates
+        run: |
+          TEMPLATES_URL="https://github.com/godotengine/godot/releases/download/${{ env.GODOT_VERSION }}-stable/Godot_v${{ env.GODOT_VERSION }}-stable_export_templates.tpz"
+          wget -q "$TEMPLATES_URL" -O templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable
+          unzip -q templates.tpz
+          mv templates/* ~/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/
+
+      # ── 4. Inject EOS credentials from GitHub Secrets ───────────────────────
+      #
+      # Add these secrets in your repo:
+      #   Settings → Secrets and variables → Actions → New repository secret
+      #
+      #   EOS_PRODUCT_NAME    → your product / game name
+      #   EOS_PRODUCT_VERSION → your game version string, e.g. 1.0
+      #   EOS_PRODUCT_ID      → your product id
+      #   EOS_SANDBOX_ID      → your sandbox id
+      #   EOS_DEPLOYMENT_ID   → your deployment id
+      #   EOS_CLIENT_ID       → your client id
+      #   EOS_CLIENT_SECRET   → your client secret
+      #
+      - name: Create eos_credentials.cfg from secrets
+        env:
+          EOS_PRODUCT_NAME:    ${{ secrets.EOS_PRODUCT_NAME }}
+          EOS_PRODUCT_VERSION: ${{ secrets.EOS_PRODUCT_VERSION }}
+          EOS_PRODUCT_ID:    ${{ secrets.EOS_PRODUCT_ID }}
+          EOS_SANDBOX_ID:    ${{ secrets.EOS_SANDBOX_ID }}
+          EOS_DEPLOYMENT_ID: ${{ secrets.EOS_DEPLOYMENT_ID }}
+          EOS_CLIENT_ID:     ${{ secrets.EOS_CLIENT_ID }}
+          EOS_CLIENT_SECRET: ${{ secrets.EOS_CLIENT_SECRET }}
+        run: |
+          cat > eos_credentials.cfg <<EOF
+          [eos]
+          product_name="$EOS_PRODUCT_NAME"
+          product_version="$EOS_PRODUCT_VERSION"
+          product_id="$EOS_PRODUCT_ID"
+          sandbox_id="$EOS_SANDBOX_ID"
+          deployment_id="$EOS_DEPLOYMENT_ID"
+          client_id="$EOS_CLIENT_ID"
+          client_secret="$EOS_CLIENT_SECRET"
+          EOF
+
+      # ── 5. Export ────────────────────────────────────────────────────────────
+      - name: Create output directory
+        run: mkdir -p build/windows
+
+      - name: Run Godot export
+        run: |
+          godot --headless --export-release "${{ env.EXPORT_PRESET }}" "build/windows/${{ env.OUTPUT_NAME }}.exe" 2>&1
+
+      # Copy credentials next to the exe so eos_bootstrap.gd finds it at runtime.
+      # (Godot's include_filter doesn't reliably pack non-imported .cfg files.)
+      - name: Copy EOS credentials into build folder
+        run: cp eos_credentials.cfg build/windows/eos_credentials.cfg
+
+      # ── 6. Upload artifact (available on every run) ──────────────────────────
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_NAME }}-windows
+          path: build/windows/
+          if-no-files-found: error
+
+      # ── 7. Create GitHub Release (only on version tags) ──────────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/windows/${{ env.OUTPUT_NAME }}.exe
+            build/windows/${{ env.OUTPUT_NAME }}.pck
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
